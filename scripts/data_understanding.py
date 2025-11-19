@@ -3,17 +3,75 @@ import numpy as np
 from ucimlrepo import fetch_ucirepo 
 import seaborn as sns
 import matplotlib.pyplot as plt
-datasets_dict = {"breast_cancer" :  17}
+
+datasets_dict = {
+    "breast_cancer" :  17,
+    "concrete_compressive_strength": 165,
+    "parkinsons":174,
+    }
 
 def understand_data(nom_dataset):
-    df = fetch_ucirepo(id=datasets_dict[nom_dataset]) 
+    # Close any existing plots to avoid display issues
+    plt.close('all')
+    
+    print(f"\n{'='*80}")
+    print(f"📌 ANALYZING DATASET: {nom_dataset.upper()}")
+    print(f"{'='*80}\n")
+    print(f"Fetching dataset: {nom_dataset} (ID: {datasets_dict[nom_dataset]})...")
+    try:
+        df = fetch_ucirepo(id=datasets_dict[nom_dataset]) 
+    except Exception as e:
+        print(f"Error fetching dataset {nom_dataset}: {e}")
+        return [], [], None
+
     data = replace_missing_values(df)
     
-    target_variable = df.variables.loc[df.variables.index[df.variables["role"]=="Target"],"name"].item()
-    categorical_variables = [name for (name,var_type) in zip(df.variables["name"],df.variables["type"]) if (var_type=="Categorical" and name!=target_variable and name!="ID")]
-    quantitatives_variables = [name for name in df.variables["name"] if (name not in categorical_variables and name!=target_variable and name!="ID")]
+    # Robust target extraction
+    target_rows = df.variables[df.variables["role"] == "Target"]
     
-    print(f"\nNumber of Lignes is : {len(data)}\n")
+    if target_rows.empty:
+        print("No target variable found in metadata.")
+        # Fallback: try to use the first column of targets dataframe if available
+        if df.data.targets is not None and not df.data.targets.empty:
+             target_variable = df.data.targets.columns[0]
+             # Guess type based on data
+             if pd.api.types.is_numeric_dtype(df.data.targets[target_variable]):
+                 type_target = "Continuous"
+             else:
+                 type_target = "Categorical"
+        else:
+             print("Cannot determine target variable.")
+             return [], [], None
+    else:
+        # Take the first target if multiple exist
+        target_variable = target_rows["name"].iloc[0]
+        type_target = target_rows["type"].iloc[0]
+    
+    print(f"Target Variable: {target_variable} (Type: {type_target})")
+
+    # Filter variables
+    # Ensure we only pick variables present in the actual data DataFrame
+    available_columns = set(data.columns)
+    
+    categorical_variables = [
+        name for (name, var_type) in zip(df.variables["name"], df.variables["type"]) 
+        if (var_type == "Categorical" or var_type == "Binary") 
+        and name != target_variable 
+        and name != "ID"
+        and name in available_columns
+    ]
+    
+    quantitatives_variables = [
+        name for name in df.variables["name"] 
+        if name not in categorical_variables 
+        and name != target_variable 
+        and name != "ID"
+        and name in available_columns
+        # Extra check: ensure it is actually numeric in the data
+        and pd.api.types.is_numeric_dtype(data[name])
+    ]
+    
+    print(f"\nNumber of Rows is : {len(data)}\n")
     print("==="*20)
     print(f"\nNumber of Columns is : {data.shape[1]}\n")
     print("==="*20)
@@ -22,6 +80,8 @@ def understand_data(nom_dataset):
     if categorical_variables:
         for col in categorical_variables:
             print(col)
+    else:
+        print("None")
     print("==="*20)
     
     print("\nQuantatatives Columns are : ")
@@ -29,6 +89,8 @@ def understand_data(nom_dataset):
     if quantitatives_variables:
         for col in quantitatives_variables:
             print(col)
+    else:
+        print("None")
             
     print("==="*20)
     print(f"\nThe Target is : {target_variable}\n")
@@ -36,9 +98,9 @@ def understand_data(nom_dataset):
     valeurs_manquantes = (data.isna().sum() / len(data)) * 100
     
     if any(valeurs_manquantes != 0):
-        for name, val in zip(list(valeurs_manquantes.index, list(valeurs_manquantes))):
+        for name, val in zip(list(valeurs_manquantes.index), list(valeurs_manquantes)):
             if val != 0:
-                print(f"{name} : {val} % missing values")
+                print(f"{name} : {val:.2f} % missing values")
     else:
         print("\nNo missing values\n")
     print("==="*20)
@@ -46,14 +108,14 @@ def understand_data(nom_dataset):
     duplicated_values_pct = (data.duplicated().sum() / len(data)) * 100
     
     if duplicated_values_pct != 0:
-        print(f"\n{duplicated_values_pct} % of lignes are duplicated\n")
+        print(f"\n{duplicated_values_pct:.2f} % of rows are duplicated\n")
     else:
         print("\nNo duplicated values\n")
     print("==="*20) 
     
     features_with_outliers = [
-    col for col in quantitatives_variables if has_outliers_iqr(data[col])
-]
+        col for col in quantitatives_variables if has_outliers_iqr(data[col])
+    ]
 
     if not features_with_outliers:
         print("\nNo significant outliers were found in any quantitative features.")
@@ -65,13 +127,13 @@ def understand_data(nom_dataset):
         
         for i in range(0, num_features, plots_per_fig):
             features_to_plot = features_with_outliers[i : i + plots_per_fig]
-            
             num_subplots = len(features_to_plot)
             
-            fig, axes = plt.subplots(1, num_subplots, figsize=(5 * num_subplots, 7))
-            
+            fig, axes = plt.subplots(1, num_subplots, figsize=(5 * num_subplots, 5))
             if num_subplots == 1:
                 axes = [axes]
+            elif not isinstance(axes, (list, np.ndarray)):
+                 axes = [axes]
                 
             for j, col in enumerate(features_to_plot):
                 sns.boxplot(y=data[col], ax=axes[j])
@@ -81,24 +143,44 @@ def understand_data(nom_dataset):
 
             plt.tight_layout()
             plt.show()
-        
-        print("==="*20)    
     
+    print("==="*20)        
     if quantitatives_variables:
+        print("\nHistplots for features\n")
         for col in quantitatives_variables:
             plot_quantitative_histogram(data, col, bins=30)
-    
+        print("==="*20)        
+
+     
     if categorical_variables:
+        print("\nCountplots for features\n")
         for col in categorical_variables:
             plot_qualitative_countplot(data, col, top_n=10)
+        print("==="*20)        
+
+    # Determine if target is effectively categorical
+    is_target_categorical = (type_target == "Categorical" or type_target == "Binary")
+    # Heuristic: if integer and few unique values, treat as categorical for plotting
+    if not is_target_categorical and pd.api.types.is_integer_dtype(data[target_variable]) and data[target_variable].nunique() < 20:
+        is_target_categorical = True
+
+    if is_target_categorical:
+        print("\nCountplot for Target\n")
+        plot_qualitative_countplot(data, target_variable, top_n=10)
+    else:
+        print("\nHistplot for Target\n")
+        plot_quantitative_histogram(data, target_variable, bins=30)
     
-    return categorical_variables,quantitatives_variables, target_variable
-
-
-# les histogrames features quantitatives w countplot lil features qualitatives
-# pairplot
+    print("==="*20)
+    if quantitatives_variables:
+        plot_pairplot(data, quantitatives_variables, target_variable, max_features=10, is_categorical_target=is_target_categorical)
+            
+    print("==="*20)
+    return categorical_variables, quantitatives_variables, target_variable
 
 def has_outliers_iqr(data_column):
+    if not pd.api.types.is_numeric_dtype(data_column):
+        return False
     q1 = data_column.quantile(0.25)
     q3 = data_column.quantile(0.75)
     iqr = q3 - q1
@@ -107,23 +189,21 @@ def has_outliers_iqr(data_column):
     outliers_exist = (data_column < lower_bound) | (data_column > upper_bound)
     return outliers_exist.any()
 
-
 def boxplot(data,col):
     sns.set_style("whitegrid")
-
     plt.figure(figsize=(6, 8))
-
     sns.boxplot(y=data[col])
-
     plt.title(f'Boxplot for {col}', fontsize=16)
     plt.ylabel('Values', fontsize=12)
-
     plt.show()
-    
     
 def plot_quantitative_histogram(df, col, bins=30):
     sns.set_style("whitegrid")
     plt.figure(figsize=(8, 5))
+    
+    if not pd.api.types.is_numeric_dtype(df[col]):
+        print(f"Skipping histogram for non-numeric column: {col}")
+        return
 
     sns.histplot(
         data=df,
@@ -154,7 +234,9 @@ def plot_qualitative_countplot(df, col, top_n=10):
     
     ax = sns.countplot(
         data=df,
+        hue=col,
         y=col,
+        legend=False,
         order=category_counts.index,
         palette='viridis'
     )
@@ -162,8 +244,10 @@ def plot_qualitative_countplot(df, col, top_n=10):
     total = len(df)
     for p in ax.patches:
         count = p.get_width()
-        
-        percentage = f'{(100 * count / total):.1f}%'
+        if total > 0:
+            percentage = f'{(100 * count / total):.1f}%'
+        else:
+            percentage = "0%"
         
         x = p.get_width()
         y = p.get_y() + p.get_height() / 2
@@ -178,13 +262,17 @@ def plot_qualitative_countplot(df, col, top_n=10):
     plt.tight_layout()
     plt.show()
     
-    
 def replace_missing_values(df):
     missing_symbol = df.metadata.get('missing_values_symbol')
     
     X = df.data.features 
     y = df.data.targets
     
+    if X is None:
+        X = pd.DataFrame()
+    if y is None:
+        y = pd.DataFrame()
+
     if missing_symbol is not None and missing_symbol != '':
         symbol_str = str(missing_symbol)
         print(f"Replacing custom missing value symbol '{symbol_str}' with np.nan...")
@@ -195,126 +283,53 @@ def replace_missing_values(df):
 
     return data
 
-# ------------------- New: Generative / Augmentation utilities -------------------
-def generate_synthetic_dataset(n=1000, p=50, scenario="classification_signal", 
-                               signal_features=None, noise_scale=1.0, random_state=None):
-    """
-    Returns (X: DataFrame, y: Series) synthetic dataset for quick benchmarking.
-    Scenarios:
-      - "classification_signal": binary target from linear signal on signal_features
-      - "nonlinear": binary target from nonlinear function of signal_features
-      - "correlated": features generated with latent factors for correlation
-      - "regression_linear": continuous target as linear combination + noise
-    """
-    rng = np.random.default_rng(random_state)
-    if signal_features is None:
-        signal_features = [0, 1]  # default signal columns
-
-    # base noise features
-    X = pd.DataFrame(rng.normal(size=(n, p)), columns=[f"X{i+1}" for i in range(p)])
-
-    if scenario == "classification_signal":
-        score = np.zeros(n)
-        for idx in signal_features:
-            score += X.iloc[:, idx]
-        score += rng.normal(scale=noise_scale, size=n)
-        y = (score > np.median(score)).astype(int)
-    elif scenario == "nonlinear":
-        score = np.zeros(n)
-        for idx in signal_features:
-            xcol = X.iloc[:, idx]
-            score += np.sin(xcol) + (xcol ** 2) * 0.1
-        score += rng.normal(scale=noise_scale, size=n)
-        y = (score > np.median(score)).astype(int)
-    elif scenario == "correlated":
-        # create k latent factors and project to features to induce correlation
-        k = max(2, len(signal_features))
-        factors = rng.normal(size=(n, k))
-        loadings = rng.normal(scale=0.8, size=(k, p))
-        X = pd.DataFrame(factors @ loadings + rng.normal(scale=0.1, size=(n, p)),
-                         columns=[f"X{i+1}" for i in range(p)])
-        # signal from some linear combination of specific features
-        score = X.iloc[:, signal_features].sum(axis=1) + rng.normal(scale=noise_scale, size=n)
-        y = (score > np.median(score)).astype(int)
-    elif scenario == "regression_linear":
-        coef = np.zeros(p)
-        for idx in signal_features:
-            coef[idx] = 1.0
-        y = X.values.dot(coef) + rng.normal(scale=noise_scale, size=n)
+def plot_pairplot(df, quantitatives_variables, target_variable, max_features=10, is_categorical_target=False):
+    sns.set_style("ticks")
+    
+    if len(quantitatives_variables) > max_features:
+        features_to_plot = quantitatives_variables[:max_features]
+        print(f"\nNote: Dataset has {len(quantitatives_variables)} quantitative features. Plotting a subset of the first {max_features} for Pair Plot readability.")
     else:
-        raise ValueError(f"Unknown scenario: {scenario}")
-
-    # return DataFrame and Series
-    return X, pd.Series(y, name="target")
-
-def add_noisy_covariates(df, target_col="target", target_p=500, correlated=False, corr_strength=0.9, random_state=None):
-    """
-    Expand df (pandas DataFrame including target_col) to have target_p total features (excluding target).
-    If correlated=True, generate covariates that are correlated with existing features.
-    """
-    rng = np.random.default_rng(random_state)
-    features = [c for c in df.columns if c != target_col]
-    current_p = len(features)
-    needed = max(0, target_p - current_p)
-    if needed == 0:
-        return df.copy()
-
-    new_cols = {}
-    for i in range(needed):
-        name = f"noise_{current_p + i + 1}"
-        if correlated and current_p > 0:
-            # correlate with a random existing feature
-            base = df[rng.choice(features)].values
-            new_cols[name] = corr_strength * base + (1 - corr_strength) * rng.normal(size=len(df))
-        else:
-            new_cols[name] = rng.normal(size=len(df))
-    augmented = df.copy()
-    for k, v in new_cols.items():
-        augmented[k] = v
-    return augmented
-
-def mixup_augmentation(df, target_col="target", alpha=0.2, n_aug=1000, random_state=None):
-    """
-    Simple MixUp augmentation for numeric features.
-    Returns augmented DataFrame (original + synthetic n_aug samples).
-    """
-    rng = np.random.default_rng(random_state)
-    features = [c for c in df.columns if c != target_col]
-    X = df[features].values
-    y = df[target_col].values
-    n = len(df)
-
-    aug_X = []
-    aug_y = []
-    for _ in range(n_aug):
-        i, j = rng.integers(0, n, size=2)
-        lam = rng.beta(alpha, alpha)
-        x_new = lam * X[i] + (1 - lam) * X[j]
-        y_new = lam * y[i] + (1 - lam) * y[j]
-        aug_X.append(x_new)
-        aug_y.append(y_new)
-
-    aug_df = pd.DataFrame(np.vstack([X, np.array(aug_X)]), columns=features)
-    aug_target = pd.Series(np.hstack([y, np.array(aug_y)]), name=target_col)
-    result = pd.concat([aug_df, aug_target], axis=1)
-    return result
-
-def smote_augment(df, target_col="target", sampling_strategy="auto", random_state=None):
-    """
-    Wrapper for SMOTE augmentation if imblearn is installed.
-    If imblearn is missing, returns the original df and prints an install hint.
-    """
+        features_to_plot = quantitatives_variables
+        
+    plot_cols = features_to_plot + [target_variable]
+    # Ensure columns exist
+    plot_cols = [c for c in plot_cols if c in df.columns]
+    
+    plot_size = 2 if len(features_to_plot) > 5 else 2.5
+    
+    print(f"Generating Pair Plot for {len(features_to_plot)} features...")
+    
+    # Prepare kwargs
+    pairplot_kwargs = {
+        "data": df[plot_cols],
+        "hue": target_variable,
+        "height": plot_size,
+        "diag_kind": "kde"
+    }
+    
+    # Only use markers if categorical and few classes, otherwise seaborn defaults or crash
+    if is_categorical_target:
+        n_classes = df[target_variable].nunique()
+        if n_classes <= 2:
+            pairplot_kwargs["markers"] = ["o", "s"][:n_classes]
+    
     try:
-        from imblearn.over_sampling import SMOTE
-    except Exception:
-        print("imblearn not available. To use SMOTE install: pip install imbalanced-learn")
-        return df.copy()
+        g = sns.pairplot(**pairplot_kwargs)
+        g.figure.suptitle(
+            f'Pair Plot of Key Quantitative Features (Colored by {target_variable})', 
+            y=1.02, 
+            fontsize=16, 
+            fontweight='bold'
+        )
+        plt.tight_layout(rect=[0, 0, 1, 1.0])
+        plt.show()
+    except Exception as e:
+        print(f"Could not generate pairplot: {e}")
 
-    features = [c for c in df.columns if c != target_col]
-    X = df[features].values
-    y = df[target_col].values
-    sm = SMOTE(sampling_strategy=sampling_strategy, random_state=random_state)
-    X_res, y_res = sm.fit_resample(X, y)
-    res_df = pd.DataFrame(X_res, columns=features)
-    res_df[target_col] = y_res
-    return res_df
+if __name__ == "__main__":
+    for nom_dataset in datasets_dict.keys():
+        print("\n" + "="*80)
+        print(f"📌 ANALYSE DU DATASET : {nom_dataset.upper()}")
+        print("="*80 + "\n")
+        understand_data(nom_dataset)
