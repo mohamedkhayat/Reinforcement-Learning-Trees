@@ -35,8 +35,10 @@ datasets_dict = {
 
 
 class DatasetWrapper:
-    def __init__(self, name, config):
+    def __init__(self, name):
+        config = datasets_dict[name]
         path = config["path"]
+
         self.target = config["target"]
         self.id_col = config.get("id_col", None)
 
