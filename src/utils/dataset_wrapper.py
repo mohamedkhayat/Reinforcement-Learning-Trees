@@ -44,7 +44,7 @@ class DatasetWrapper:
 
         self.type_target = config["type"]
 
-        self.df = pd.read_csv("datasets/" + path, na_values=["?", "nan", "NaN", ""])
+        self.df = pd.read_csv("../datasets/" + path, na_values=["?", "nan", "NaN", ""])
         self.df = self.df.drop_duplicates()
 
         all_numerics = self.df.select_dtypes(include=[np.number]).columns.tolist()
