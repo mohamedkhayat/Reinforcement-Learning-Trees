@@ -2,9 +2,10 @@ import numpy as np
 from Node import Node
 import pandas as pd
 from typing import Any, Tuple, Union
+from abc import ABC, abstractmethod
 
 
-class RLT:
+class RLT(ABC):
     def __init__(
         self, max_depth: int, min_samples_split: int = 2, random_state: int = 42
     ) -> None:
@@ -16,28 +17,31 @@ class RLT:
     def _set_seed(self, seed: int) -> None:
         np.random.seed(seed)
 
-    def _get_split_gini(
-        self, y: np.ndarray, indice_left: np.ndarray, indice_right: np.ndarray
+    def _get_score(
+        self,
+        y: np.ndarray,
+        indice_left: np.ndarray,
+        indice_right: np.ndarray,
     ) -> float:
         y_left = y[indice_left]
         y_right = y[indice_right]
 
-        gini_gauche = self._get_gini(y_left)
-        gini_droite = self._get_gini(y_right)
+        score_gauche = self._get_loss(y_left)
+        score_droite = self._get_loss(y_right)
 
         nombre_observations_total = len(y)
 
         proportion_a_gauche = len(y_left) / nombre_observations_total
         proportion_a_droite = len(y_right) / nombre_observations_total
 
-        gini_total = (
-            proportion_a_gauche * gini_gauche + proportion_a_droite * gini_droite
+        score_total = (
+            proportion_a_gauche * score_gauche + proportion_a_droite * score_droite
         )
-        return gini_total
+        return score_total
 
     def _find_best_split(self, X: np.ndarray, y: np.ndarray) -> Tuple[int, int]:
         best_feature = best_threshold = None
-        best_gini = float("inf")
+        best_score = float("inf")
         # nlawjou ahsen variable
         for variable in range(X.shape[1]):
             # nlawjou ahsen seuil
@@ -57,14 +61,14 @@ class RLT:
                 indice_a_gauche = [2]
                 indice_a_droite = [0, 1]
                 
-                X_left = X[indice_a_gauche, :]
-                X_right X[indice_a_droite, :]
+                X_left = X[indice_a_gauche, : ]
+                X_right X[indice_a_droite,  : ]
                 
                 """
 
-                gini_total = self._get_split_gini(y, indice_left, indice_right)
-                if gini_total < best_gini:
-                    best_gini = gini_total
+                score = self._get_score(y, indice_left, indice_right)
+                if score < best_score:
+                    best_score = score
                     best_feature = variable
                     best_threshold = threshold
 
@@ -94,8 +98,8 @@ class RLT:
         indice_left = np.where(X[:, best_feature] <= best_threshold)[0]
         indice_right = np.where(X[:, best_feature] > best_threshold)[0]
 
-        x_left, y_left = X[indice_left, :], y[indice_left]
-        x_right, y_right = X[indice_right, :], y[indice_right]
+        x_left, y_left = X[indice_left, : ], y[indice_left]
+        x_right, y_right = X[indice_right, : ], y[indice_right]
 
         left_node = self._build_tree(x_left, y_left, depth + 1)
         right_node = self._build_tree(x_right, y_right, depth + 1)
@@ -106,36 +110,13 @@ class RLT:
             right_node,
         )
 
-    def _get_gini(self, y: np.ndarray) -> float:
-        if len(y) <= 1:
-            return 0
+    @abstractmethod
+    def _get_loss(self, y: np.ndarray) -> float:
+        pass
 
-        # calcul nombre d'occurence chaque classe:
-        # par example : y = [0, 1, 1, 1]
-        classes, counts = np.unique(y, return_counts=True)
-        # classes = [0, 1]
-        # counts = [1, 3]
-        probabilities = counts / len(y)
-        """
-        len(y) = 4
-        probabilities = pour chaque classe,
-        on divise nombre d'occurence sur nombre total d'observation
-        [1 /4, 3/4]
-        gini = 1 - somme(probalities ** 2)
-        somme = 0
-        for proba in probabilities:
-            proba_carré = probabilities ** 2
-            somme += proba_carré
-        gini = 1 - gini
-        """
-        gini = 1 - np.sum(probabilities**2)
-        return gini
-
+    @abstractmethod
     def _get_node_value(self, y: np.ndarray) -> Any:
-        values, counts = np.unique(y, return_counts=True)
-        idx = np.argmax(counts)
-        label = values[idx]
-        return label
+        pass
 
     def fit(
         self, X: Union[pd.DataFrame, np.ndarray], y: Union[pd.Series, np.ndarray]
