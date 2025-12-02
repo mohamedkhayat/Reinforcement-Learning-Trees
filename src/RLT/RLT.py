@@ -3,16 +3,29 @@ from Node import Node
 import pandas as pd
 from typing import Any, Tuple, Union
 from abc import ABC, abstractmethod
+from EmbeddedModel import EmbeddedModel
 
 
-class RLT(ABC):
+class BaseRLT(ABC):
     def __init__(
-        self, max_depth: int, min_samples_split: int = 2, random_state: int = 42
+        self,
+        max_depth: int,
+        min_samples_split: int = 2,
+        n_estimators=50,
+        muting_rate=0.5,
+        protected_count=2,
+        random_state: int = 42,
+        *,
+        task_type,
     ) -> None:
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.root = None
         self._set_seed(random_state)
+        self.task_type = task_type
+        self.n_estimators = n_estimators
+        self.muting_rate = muting_rate
+        self.protected_count = protected_count
 
     def _set_seed(self, seed: int) -> None:
         np.random.seed(seed)
@@ -23,8 +36,7 @@ class RLT(ABC):
         indice_left: np.ndarray,
         indice_right: np.ndarray,
     ) -> float:
-        y_left = y[indice_left]
-        y_right = y[indice_right]
+        y_left, y_right = y[indice_left], y[indice_right]
 
         score_gauche = self._get_loss(y_left)
         score_droite = self._get_loss(y_right)
@@ -39,70 +51,81 @@ class RLT(ABC):
         )
         return score_total
 
-    def _find_best_split(self, X: np.ndarray, y: np.ndarray) -> Tuple[int, int]:
-        best_feature = best_threshold = None
+    def _find_best_threshold(self, X, y):
+        candidates = np.random.uniform(np.min(X), np.max(X), size=5)
+        best_thresh = None
         best_score = float("inf")
-        # nlawjou ahsen variable
-        for variable in range(X.shape[1]):
-            # nlawjou ahsen seuil
-            for threshold in sorted(np.unique(X[:, variable])):
-                # nkasmou donnes mte3na sur 2, eli a gauche w a droite
-                indice_left = np.where(X[:, variable] <= threshold)
-                indice_right = np.where(X[:, variable] > threshold)
 
-                if len(indice_left) == 0 or len(indice_right) == 0:
-                    continue
-                """
-                X : colonnes : toul w age : {
-                                            [toul : 178, 180, 150],
-                                            [age : 20, 22, 19]
-                                            }
-                supposans ahna wselna feature : age, threshold = 20
-                indice_a_gauche = [2]
-                indice_a_droite = [0, 1]
-                
-                X_left = X[indice_a_gauche, : ]
-                X_right X[indice_a_droite,  : ]
-                
-                """
+        for t in candidates:
+            indice_left = np.where(X <= t)
+            indice_right = np.where(X > t)
+            score = self._get_score(y, indice_left, indice_right)
+            if score < best_score:
+                best_score = score
+                best_thresh = t
 
-                score = self._get_score(y, indice_left, indice_right)
-                if score < best_score:
-                    best_score = score
-                    best_feature = variable
-                    best_threshold = threshold
+        return best_thresh
 
-        return best_feature, best_threshold
-
-    def _build_tree(self, X: np.ndarray, y: np.ndarray, depth: int = 0) -> Node:
+    def _build_tree(
+        self, X: np.ndarray, y: np.ndarray, muted_set, protected_set, depth: int = 0
+    ) -> Node:
         # nchoufou est ce que noeud terminal wale bich nwakfou
         # example : max_depth = 3, min_samples_split = 1
         # len(y) = 4
         # wselna depth = 3
         # donc iwali noeud terminal
         # [0,1,2], [[0,1,2]]
+        n_samples = X.shape[0]
+        n_classes = len(np.unique(y))
+
         if (
             depth >= self.max_depth
-            or len(X) <= self.min_samples_split
-            or len(np.unique(y)) == 1
+            or n_samples <= self.min_samples_split
+            or n_classes == 1
         ):
             valeur = self._get_node_value(y)
             return Node(valeur=valeur)
 
-        best_feature, best_threshold = self._find_best_split(X, y)
+        all_features = set(range(X.shape[1]))
+        valid_features = list(all_features - muted_set)
+
+        embedded_model = EmbeddedModel(
+            self.task_type, self.n_estimators, self.min_samples_split
+        )
+        importances = embedded_model.get_feature_importance(X, y, valid_features)
+        sorted_feature_importance = sorted(
+            importances, key=importances.get, reverse=True
+        )
+        best_feature = sorted_feature_importance[0]
 
         if best_feature is None:
             valeur = self._get_node_value(y)
             return Node(valeur=valeur)
 
-        indice_left = np.where(X[:, best_feature] <= best_threshold)[0]
-        indice_right = np.where(X[:, best_feature] > best_threshold)[0]
+        top_features = sorted_feature_importance[: self.protected_count]
+        new_protected_set = protected_set.union(top_features)
 
-        x_left, y_left = X[indice_left, : ], y[indice_left]
-        x_right, y_right = X[indice_right, : ], y[indice_right]
+        num_to_mute = int(len(valid_features) * self.muting_rate)
+        candidates_to_mute = sorted_feature_importance[-num_to_mute:]
+        new_muted_set = muted_set.copy()
 
-        left_node = self._build_tree(x_left, y_left, depth + 1)
-        right_node = self._build_tree(x_right, y_right, depth + 1)
+        for feat in candidates_to_mute:
+            if feat not in new_protected_set:
+                new_muted_set.add(feat)
+
+        best_threshold = self._find_best_threshold(X[:, best_feature], y)
+
+        indice_left = X[:, best_feature] <= best_threshold
+        indice_right = X[:, best_feature] > best_threshold
+        x_left, y_left = X[indice_left, :], y[indice_left]
+        x_right, y_right = X[indice_right, :], y[indice_right]
+
+        left_node = self._build_tree(
+            x_left, y_left, new_muted_set, new_protected_set, depth + 1
+        )
+        right_node = self._build_tree(
+            x_right, y_right, new_muted_set, new_protected_set, depth + 1
+        )
         return Node(
             best_feature,
             best_threshold,
@@ -126,7 +149,10 @@ class RLT(ABC):
         if isinstance(y, pd.Series):
             y = y.values
 
-        self.root = self._build_tree(X, y, depth=0)
+        initial_muted = set()
+        initial_protected = set()
+
+        self.root = self._build_tree(X, y, initial_muted, initial_protected, depth=0)
         return self.root
 
     def predict(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
