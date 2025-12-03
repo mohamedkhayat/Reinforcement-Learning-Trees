@@ -34,9 +34,14 @@ Reinforcement-Learning-Trees/
 │   ├── utils/
 │   │   └── dataset_wrapper.py        # ⭐ Classe pour standardiser les datasets
 │   │
-│   └── scripts/
+│   ├── scripts/
 │       ├── data_understanding.py      # ⭐ Exploration et visualisation
 │       └── data_preparation.py        # ⭐ Nettoyage et préparation
+│   └── RLT/
+│       ├── Node.py                    # Structure d'un nœud de l'arbre RLT
+│       ├── RLT.py                     # Base commune aux variantes RLT
+│       ├── RLTClassification.py       # Spécialisation pour les tâches BO1/DSO1 (classification)
+│       └── RLTRegression.py           # Spécialisation pour les tâches BO1/DSO1 (régression)
 │
 ├── notebooks/
 │   └── notebook.ipynb                 # Pipeline complet (Phases 1-6)
@@ -438,6 +443,48 @@ print(f"Shape of X_test: {X_test_scaled.shape}")    # Ex: (114, 30)
 print(f"Shape of y_train: {y_train.shape}")         # Ex: (455,)
 print(f"Shape of y_test: {y_test.shape}")           # Ex: (114,)
 ```
+
+---
+
+### 4️⃣ Répertoire `src/RLT/` – Cœur de l'Algorithme RLT
+
+#### 🎯 **Rôle global et lien avec les objectifs (BO/DSO)**
+
+Le dossier `src/RLT/` regroupe l'implémentation incrémentale du modèle demandé par le **BO1** (« Réimplémenter la stratégie ») et son pendant technique **DSO1** (« Implémenter l'algorithme RLT »). Les spécialisations y préparent aussi les comparaisons de **DSO2** (benchmarks classification/régression) et les futurs modules d'explicabilité (BO3/DSO3) en conservant une structure de nœuds riche en méta-données.
+
+| Fichier                | Responsabilité principale                                                                                                                                                  | Objectifs couverts                                                                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `Node.py`              | Définition de la structure minimale d'un nœud RLT (enfants, statistiques, récompense estimée).                                                                             | BO1 / DSO1 – supporte les trois innovations RLT (look-ahead, muting, combinaisons linéaires).                      |
+| `RLT.py`               | Classe de base factorisant la construction d'arbres, la stratégie de renforcement et l'orchestration des sous-modules (muting, splits linéaires, politique de récompense). | BO1 / DSO1 – colonne vertébrale de l'implémentation ; prépare l'instrumentation pour BO3 (stockage des décisions). |
+| `RLTClassification.py` | Spécialisation de `RLT` pour les tâches supervisées discrètes : calcul de récompenses basé sur la pureté, gestion du vote majoritaire, métriques de gain.                  | BO1 & DSO1 – scénarios de classification ; BO2 / DSO2 – comparaisons avec RF, GBM, XGB.                            |
+| `RLTRegression.py`     | Spécialisation de `RLT` pour les cibles continues : erreurs quadratiques, moyenne locale, ajustement des coefficients de combinaisons linéaires.                           | BO1 & DSO1 – scénarios de régression ; BO2 / DSO2 – benchmarks continus.                                           |
+
+#### 🧩 **Interactions internes**
+
+```mermaid
+flowchart TD
+    A[DatasetWrapper / Data Preparation] --> |X_train, y_train| B[RLTClassification]
+    A --> |X_train, y_train| C[RLTRegression]
+    B --> D{Node}
+    C --> D
+    B --> E[RLT (Base)]
+    C --> E
+    E --> D
+```
+
+- **`Node.py`** centralise les attributs utilisés par les stratégies RLT : profondeur, sous-échantillons, récompenses Q(s, a) et liste des variables actives (utile pour le **Progressive Muting**, donc BO1/innovation n°2).
+- **`RLT.py`** encapsule les trois composantes clés décrites dans le notebook (look-ahead, muting, combinaisons linéaires) et expose des hooks (`select_action`, `evaluate_reward`, `update_policy`) que les variantes utilisent. Cette classe servira d'ancrage aux modules d'explicabilité (BO3/DSO3) en conservant l'historique des décisions.
+- **`RLTClassification.py`** implémente les heuristiques propres aux scénarios 1 & 2 de l'article (cibles binaires / multi-classes) et prépare la pipeline de comparaison demandée dans BO2/DSO2 (scores d'exactitude, log-loss, courbes ROC).
+- **`RLTRegression.py`** couvre les scénarios 3 & 4 (signal linéaire / interaction continue) en fournissant la logique MSE/RMSE et la sélection de variables pour les combinaisons linéaires ; indispensable pour comparer RLT à GBM/XGBoost sur les jeux continus (BO2/DSO2).
+
+#### 🛠️ **Utilisation prévue dans le notebook (`notebook.ipynb`)**
+
+1. **Phase 3 → Phase 4** : après la préparation des données, le notebook instanciera `RLTClassification` ou `RLTRegression` selon le type de `wrapper.type_target`.
+2. **BO1 / DSO1 (Cellules Phase 4)** : les expérimentations sur scénarios synthétiques utiliseront directement ces classes pour construire un ensemble de M arbres (`M=100` défini dans le plan DSO1).
+3. **BO2 / DSO2** : lors des comparaisons avec RF/GBM/XGB, `RLTClassification` et `RLTRegression` fourniront les métriques RLT et enregistreront le temps d'entraînement pour aligner le tableau de benchmark prévu.
+4. **BO3 / DSO3** : les objets `Node` maintiennent les variables sélectionnées à chaque profondeur, information réutilisable pour générer importances globales et explications locales.
+
+> 📌 **À retenir :** le répertoire `src/RLT/` est la pièce maîtresse qui connecte les données préparées (Phases 2-3) aux objectifs métiers BO1-BO4 définis dans le notebook. Chaque fichier y contribue en séparant clairement la logique structurelle (nœuds), la mécanique générique (classe de base) et les spécialisations par type de cible.
 
 #### 🎯 **Retour de Fonction**
 
