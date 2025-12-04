@@ -53,7 +53,86 @@ class RLT(ABC):
             proportion_a_gauche * score_gauche + proportion_a_droite * score_droite
         )
         return score_total
-    
+
+    def _find_best_split(
+        self, X: np.ndarray, y: np.ndarray, valid_features: List
+    ) -> Tuple[int, int]:
+        embedded_model = EmbeddedModel(
+            self.task_type,
+            self.n_estimators,
+            self.max_depth,
+            self.min_samples_split,
+        )
+
+        VI_scores = embedded_model.get_variables_importances(X, y, valid_features)
+
+        variables_sorted_by_importance = sorted(
+            VI_scores, key=VI_scores.get, reverse=True
+        )
+        best_feature = variables_sorted_by_importance[0]
+
+        return best_feature, variables_sorted_by_importance, VI_scores
+
+    def _find_best_threshold(self, X, y, coefficients, valid_features, best_feature):
+        best_score = float("inf")
+        q = 0.2
+
+        idx = valid_features.index(best_feature)
+
+        best_coeff = coefficients[idx]
+
+        Z = X[:, best_feature] * best_coeff
+
+        # Z = np.dot(X[:, valid_features], coefficients)
+
+        min_threshold = np.quantile(Z, q)
+        max_threshold = np.quantile(Z, 1 - q)
+
+        if min_threshold >= max_threshold:
+            return min_threshold
+
+        thresholds = np.random.uniform(
+            low=min_threshold, high=max_threshold, size=self.n_thresholds_to_try
+        )
+
+        best_threshold = thresholds[0]
+
+        for threshold in thresholds:
+            indice_left = np.where(Z <= threshold)[0]
+            indice_right = np.where(Z > threshold)[0]
+
+            if len(indice_left) == 0 or len(indice_right) == 0:
+                continue
+
+            score = self._get_score(y, indice_left, indice_right)
+            if score < best_score:
+                best_score = score
+                best_threshold = threshold
+
+        return best_threshold
+
+    def _get_coefficients(self, X, y, valid_features, VI_scores):
+        coeffs = []
+
+        for col_idx in valid_features:
+            feature_col = X[:, col_idx]
+
+            if np.std(feature_col) == 0 or np.std(y) == 0:
+                rho = 0
+            else:
+                rho = np.corrcoef(feature_col, y)[0, 1]
+
+            direction = np.sign(rho)
+            if direction == 0:
+                direction = 1
+
+            magnitude = np.sqrt(VI_scores[col_idx])
+
+            beta = direction * magnitude
+            coeffs.append(beta)
+
+        return np.array(coeffs)
+
     def _build_tree(
         self,
         X: np.ndarray,
