@@ -15,7 +15,7 @@ This project follows the **CRISP-DM (Cross-Industry Standard Process for Data Mi
 *   **Title:** Reinforcement Learning Trees
 *   **Authors:** Ruoqing Zhu, Donglin Zeng, & Michael R. Kosorok
 *   **Journal:** Journal of the American Statistical Association (2015)
-*   **Original Paper:** [Link to Paper / DOI]
+*   **Original Paper:** https://www.tandfonline.com/doi/full/10.1080/01621459.2015.1036994?scroll=top&needAccess=true
 
 ---
 
