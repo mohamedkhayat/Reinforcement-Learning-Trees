@@ -454,6 +454,7 @@ Le dossier `src/RLT/` regroupe l'implémentation incrémentale du modèle demand
 
 | Fichier                | Responsabilité principale                                                                                                                                                  | Objectifs couverts                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `EmbeddedModel.py`     | Implémentation de l'« embedded model » (Extra Trees) utilisé à chaque nœud pour estimer l'importance des variables et alimenter la stratégie look-ahead.                  | BO1 / DSO1 – innovation n°1 (renforcement via variable importance) ; prépare les métriques utilisées pour la muting list (BO4/DSO4). |
 | `Node.py`              | Définition de la structure minimale d'un nœud RLT (enfants, statistiques, récompense estimée).                                                                             | BO1 / DSO1 – supporte les trois innovations RLT (look-ahead, muting, combinaisons linéaires).                      |
 | `RLT.py`               | Classe de base factorisant la construction d'arbres, la stratégie de renforcement et l'orchestration des sous-modules (muting, splits linéaires, politique de récompense). | BO1 / DSO1 – colonne vertébrale de l'implémentation ; prépare l'instrumentation pour BO3 (stockage des décisions). |
 | `RLTClassification.py` | Spécialisation de `RLT` pour les tâches supervisées discrètes : calcul de récompenses basé sur la pureté, gestion du vote majoritaire, métriques de gain.                  | BO1 & DSO1 – scénarios de classification ; BO2 / DSO2 – comparaisons avec RF, GBM, XGB.                            |
@@ -472,6 +473,7 @@ flowchart TD
     E --> D
 ```
 
+- **`EmbeddedModel.py`** encapsule un mini-modèle *Extremely Randomized Tree* (classification ou régression) exécuté avec bagging/OOB pour produire des scores d'importance par permutation. Ces scores alimentent directement `RLT.select_action` (look-ahead) et mettent à jour la liste des variables actives pour le muting.
 - **`Node.py`** centralise les attributs utilisés par les stratégies RLT : profondeur, sous-échantillons, récompenses Q(s, a) et liste des variables actives (utile pour le **Progressive Muting**, donc BO1/innovation n°2).
 - **`RLT.py`** encapsule les trois composantes clés décrites dans le notebook (look-ahead, muting, combinaisons linéaires) et expose des hooks (`select_action`, `evaluate_reward`, `update_policy`) que les variantes utilisent. Cette classe servira d'ancrage aux modules d'explicabilité (BO3/DSO3) en conservant l'historique des décisions.
 - **`RLTClassification.py`** implémente les heuristiques propres aux scénarios 1 & 2 de l'article (cibles binaires / multi-classes) et prépare la pipeline de comparaison demandée dans BO2/DSO2 (scores d'exactitude, log-loss, courbes ROC).
@@ -484,7 +486,15 @@ flowchart TD
 3. **BO2 / DSO2** : lors des comparaisons avec RF/GBM/XGB, `RLTClassification` et `RLTRegression` fourniront les métriques RLT et enregistreront le temps d'entraînement pour aligner le tableau de benchmark prévu.
 4. **BO3 / DSO3** : les objets `Node` maintiennent les variables sélectionnées à chaque profondeur, information réutilisable pour générer importances globales et explications locales.
 
-> 📌 **À retenir :** le répertoire `src/RLT/` est la pièce maîtresse qui connecte les données préparées (Phases 2-3) aux objectifs métiers BO1-BO4 définis dans le notebook. Chaque fichier y contribue en séparant clairement la logique structurelle (nœuds), la mécanique générique (classe de base) et les spécialisations par type de cible.
+> 📌 **À retenir :** le répertoire `src/RLT/` est la pièce maîtresse qui connecte les données préparées (Phases 2-3) aux objectifs métiers BO1-BO4 définis dans le notebook. Chaque fichier y contribue en séparant clairement la logique structurelle (nœuds), la mécanique générique (classe de base), le moteur d'importance embarqué et les spécialisations par type de cible.
+
+#### 🗺️ **Prochaines étapes pour boucler DSO1**
+
+1. **Brancher l'embedded model dans `RLT.py`** : sécuriser l'appel à `EmbeddedModel.get_variables_importances`, ajouter la gestion des seeds (`random_state`) et des cas limites (samples < `min_samples_split`).
+2. **Programmer les 4 scénarios synthétiques** : créer un module `src/RLT/scenarios.py` (ou équivalent) qui génère les jeux contrôlés décrits dans la documentation (classification linéaire/non-linéaire, interactions corrélées, régression linéaire).
+3. **Orchestration d'entraînement** : implémenter une fonction utilitaire (ex. `run_experiment(config)`) qui enchaîne préparation des données, apprentissage de `M=100` arbres RLT, application du muting progressif et des splits linéaires (`k` dans {1,2,5}).
+4. **Logging des métriques** : consigner dans un dataframe les scores (accuracy/MSE), le temps d'entraînement, la profondeur moyenne et la taille effective des variables actives pour comparer aux résultats de l'article de référence.
+5. **Préparer l'explicabilité (pont vers DSO3)** : enrichir `Node` pour stocker les importances renvoyées par l'embedded model à chaque split, facilitant la production des rapports XAI prévus.
 
 #### 🎯 **Retour de Fonction**
 
