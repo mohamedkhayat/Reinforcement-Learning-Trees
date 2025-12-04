@@ -1,13 +1,26 @@
-from typing import Any
 import numpy as np
-from RLT import RLT
+from RLT import BaseRLT
 
 
-class RLTRegression(RLT):
+class RLTRegression(BaseRLT):
     def __init__(
-        self, max_depth: int, min_samples_split: int = 2, random_state: int = 42
+        self,
+        max_depth,
+        min_samples_split=2,
+        n_estimators=50,
+        muting_rate=0.5,
+        protected_count=2,
+        random_state=42,
     ):
-        super().__init__(max_depth, min_samples_split, random_state)
+        super().__init__(
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            n_estimators=n_estimators,
+            muting_rate=muting_rate,
+            protected_count=protected_count,
+            random_state=random_state,
+            task_type="regression",
+        )
 
     def _get_loss(self, y: np.ndarray) -> float:
         if len(y) == 0:
