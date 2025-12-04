@@ -9,12 +9,10 @@ class EmbeddedModel:
         n_estimators=30,
         max_depth=None,
         min_samples_split=2,
-        random_state=42,
     ):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
-        np.random.seed(random_state)
         self.task_type = task_type
 
     def get_variables_importances(self, X, y, valid_features):
@@ -49,23 +47,20 @@ class EmbeddedModel:
             if len(test_idx) == 0:
                 continue
 
-            X_train, y_train = X_valid[train_idx, : ], y[train_idx]
-            X_oob, y_oob = X_valid[test_idx, : ], y[test_idx]
+            X_train, y_train = X_valid[train_idx, :], y[train_idx]
+            X_oob, y_oob = X_valid[test_idx, :], y[test_idx]
 
             if self.task_type == "classification":
                 model = ExtraTreeClassifier(
                     min_samples_split=self.min_samples_split,
                     max_depth=self.max_depth,
-                    random_state=self.random_state,
                 )
 
             elif self.task_type == "regression":
                 model = ExtraTreeRegressor(
                     min_samples_split=self.min_samples_split,
                     max_depth=self.max_depth,
-                    random_state=self.random_state,
                 )
-                somme_MSE += np.mean((y_oob - y_pred) ** 2)
 
             model.fit(X_train, y_train)
             y_pred = model.predict(X_oob)
