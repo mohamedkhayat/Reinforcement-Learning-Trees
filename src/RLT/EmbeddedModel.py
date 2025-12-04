@@ -1,85 +1,105 @@
-import numpy as np
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
+import numpy as np
 
 
 class EmbeddedModel:
-    def __init__(self, task_type, n_estimators=50, min_samples_split=2):
-        self.task_type = task_type
+    def __init__(
+        self,
+        task_type,
+        n_estimators=30,
+        max_depth=None,
+        min_samples_split=2,
+        random_state=42,
+    ):
         self.n_estimators = n_estimators
+        self.max_depth = max_depth
         self.min_samples_split = min_samples_split
+        np.random.seed(random_state)
+        self.task_type = task_type
 
-    def get_feature_importance(self, X, y, features):
+    def get_variables_importances(self, X, y, valid_features):
         n_samples = X.shape[0]
 
         if n_samples < self.min_samples_split:
-            return {feat: 0.0 for feat in features}
+            return np.zeros((len(valid_features),))
 
-        X_subset_features = X[:, features]
+        X_valid = X[:, valid_features]
 
-        sum_baseline_error = 0.0
+        somme_PMSE = np.zeros(
+            (len(valid_features)),
+        )
+        somme_MSE = 0.0
 
-        trees_with_oob = 0
-
-        perm_errors = np.zeros(len(features))
         for i in range(self.n_estimators):
             indices = np.arange(n_samples)
+
+            # bagging
             train_idx = np.random.choice(indices, n_samples, replace=True)
-
-            mask = np.ones(n_samples, dtype=bool)
+            # indices   = [0, 1, 2, 3, 4, 5]
+            # train_idx = [1, 1, 1, 2, 4, 4]
+            # mask      = [1, 1, 1, 1, 1, 1]
+            # indice[mask] = indices[5, False, 0, False, 3, False, False]
+            # result = indices[5, 0, 3]
+            mask = np.ones((n_samples), dtype=bool)  # [1,1 ,1,1,1,1]
             mask[train_idx] = False
-            oob_idx = indices[mask]
+            # [ 0 0 0 0 1 0 1 0] # 0 si pour train, 1 si pour oob
+            # indices[mask] = [0 1 2 3 4 5 6], [False, False, False, False, 1]
+            test_idx = indices[mask]
 
-            if len(oob_idx) == 0:
+            if len(test_idx) == 0:
                 continue
 
-            trees_with_oob += 1
+            X_train, y_train = X_valid[train_idx, : ], y[train_idx]
+            X_oob, y_oob = X_valid[test_idx, : ], y[test_idx]
 
-            X_train, y_train = X_subset_features[train_idx], y[train_idx]
-            X_oob, y_oob = X_subset_features[oob_idx], y[oob_idx]
-
-            if self.task_type == "regression":
-                model = ExtraTreeRegressor(
-                    min_samples_split=self.min_samples_split, max_features="sqrt"
-                )
-            else:
+            if self.task_type == "classification":
                 model = ExtraTreeClassifier(
-                    min_samples_split=self.min_samples_split, max_features="sqrt"
+                    min_samples_split=self.min_samples_split,
+                    max_depth=self.max_depth,
+                    random_state=self.random_state,
                 )
+
+            elif self.task_type == "regression":
+                model = ExtraTreeRegressor(
+                    min_samples_split=self.min_samples_split,
+                    max_depth=self.max_depth,
+                    random_state=self.random_state,
+                )
+                somme_MSE += np.mean((y_oob - y_pred) ** 2)
 
             model.fit(X_train, y_train)
+            y_pred = model.predict(X_oob)
 
-            baseline_preds = model.predict(X_oob)
+            if self.task_type == "classification":
+                somme_MSE += np.mean(y_pred != y_oob)
 
-            if self.task_type == "regression":
-                error = np.sum((baseline_preds - y_oob) ** 2)
-            else:
-                error = np.sum(baseline_preds != y_oob)
+            elif self.task_type == "regression":
+                somme_MSE += np.mean((y_oob - y_pred) ** 2)
 
-            sum_baseline_error += error
+            for idx_variable in range(len(valid_features)):
+                col = X_oob[:, idx_variable].copy()
+                np.random.shuffle(X_oob[:, idx_variable])
+                y_pred = model.predict(X_oob)
+                X_oob[:, idx_variable] = col
 
-            for local_feature_idx in range(len(features)):
-                original_col = X_oob[:, local_feature_idx].copy()
-                np.random.shuffle(X_oob[:, local_feature_idx])
-                permutation_preds = model.predict(X_oob)
-                X_oob[:, local_feature_idx] = original_col
+                if self.task_type == "classification":
+                    somme_PMSE[idx_variable] += np.mean(y_pred != y_oob)
 
-                if self.task_type == "regression":
-                    perm_error = np.sum((permutation_preds - y_oob) ** 2)
-                else:
-                    perm_error = np.sum(permutation_preds != y_oob)
+                elif self.task_type == "regression":
+                    somme_PMSE[idx_variable] += np.mean((y_oob - y_pred) ** 2)
 
-                perm_errors[local_feature_idx] += perm_error
-
-        if trees_with_oob == 0:
-            return {feat: 0.0 for feat in features}
-
-        if sum_baseline_error == 0:
-            sum_baseline_error = 1e-10
+        if somme_MSE == 0:
+            somme_MSE = 1e-10
 
         vi_scores = {}
 
-        for local_idx, actual_idx in enumerate((features)):
-            vi = perm_errors[local_idx] / sum_baseline_error - 1
-            vi_scores[actual_idx] = max(0, vi)
+        # valid features : [1, 2, 6, 8]
+        # PMSE : 0, 1, 2, 3
+
+        for idx_local, idx_global in enumerate(valid_features):
+            ratio = somme_PMSE[idx_local] / somme_MSE
+            vi = ratio - 1
+            vi = max(vi, 0)
+            vi_scores[idx_global] = vi
 
         return vi_scores
