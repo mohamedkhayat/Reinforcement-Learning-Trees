@@ -65,7 +65,6 @@ class EmbeddedModel:
                     max_depth=self.max_depth,
                     random_state=self.random_state,
                 )
-                somme_MSE += np.mean((y_oob - y_pred) ** 2)
 
             model.fit(X_train, y_train)
             y_pred = model.predict(X_oob)
