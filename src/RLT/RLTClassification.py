@@ -1,32 +1,57 @@
 from typing import Any
 import numpy as np
-from RLT import RLT
+from RLT.ReinforcementLearningTree import ReinforcementLearningTree
 
 
-class RLTClassification(RLT):
+class RLTClassification(ReinforcementLearningTree):
+    """
+    Classification variant of Reinforcement Learning Tree.
+
+    Uses Gini impurity as the loss function and majority vote for prediction.
+    """
+
     def __init__(
         self,
         task_type: str,
         n_estimators: int,
         muting_rate: float,
         min_protected: int,
+        k: int,
+        alpha: int,
         n_thresholds_to_try: int,
         max_depth: int,
         min_samples_split: int = 2,
         random_state: int = 42,
+        n_jobs: int = 1,
     ):
         super().__init__(
             task_type,
             n_estimators,
             muting_rate,
             min_protected,
+            k,
+            alpha,
             n_thresholds_to_try,
             max_depth,
             min_samples_split,
             random_state,
+            n_jobs,
         )
 
     def _get_loss(self, y: np.ndarray) -> float:
+        """
+        Compute Gini impurity for the target values.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Target values.
+
+        Returns
+        -------
+        float
+            The Gini impurity.
+        """
         if len(y) <= 1:
             return 0
 
@@ -52,6 +77,19 @@ class RLTClassification(RLT):
         return gini
 
     def _get_node_value(self, y: np.ndarray) -> Any:
+        """
+        Find the most frequent class (majority vote).
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Target values.
+
+        Returns
+        -------
+        Any
+            The most frequent class label.
+        """
         values, counts = np.unique(y, return_counts=True)
         idx = np.argmax(counts)
         label = values[idx]
