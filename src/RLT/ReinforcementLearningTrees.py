@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from RLT.RLTClassification import RLTClassification
 from RLT.RLTRegression import RLTRegression
-from scipy.stats import mode
 
 from RLT.ReinforcementLearningTree import ReinforcementLearningTree
 
@@ -45,12 +44,12 @@ class ReinforcementLearningTrees:
         self,
         task_type: str,
         n_rlt_trees: int = 10,
-        n_extra_trees: int = 50,
+        n_extra_trees: int = 100,
         muting_rate: float = 0.5,
         min_protected: int = 3,
         k: int = 1,
-        alpha: int = 0.1,
-        n_thresholds_to_try: int = 10,
+        alpha: int = 0.25,
+        n_thresholds_to_try: int = 2,
         max_depth: int = 10,
         min_samples_split: int = 5,
         n_jobs: int = 1,
@@ -99,7 +98,7 @@ class ReinforcementLearningTrees:
         RLTRegression or RLTClassification
             The fitted tree instance.
         """
-        if self.task_type == "regression":
+        if self.task_type.lower() == "regression":
             model = RLTRegression(
                 "regression", random_state=seed, n_jobs=embedded_n_jobs, **params
             )
@@ -124,6 +123,11 @@ class ReinforcementLearningTrees:
         y : np.ndarray
             Training targets.
         """
+        if self.task_type.lower() == "classification":
+            self.classes_ = np.unique(y)
+        else:
+            self.classes_ = None
+
         n_samples = len(y)
         rng = np.random.default_rng(self.random_state)
 
@@ -184,7 +188,7 @@ class ReinforcementLearningTrees:
         self._build_forest(X, y)
         return self
 
-    def _aggregate_results(self, X: np.ndarray) -> Union[int, float]:
+    def _aggregate_results(self, X: np.ndarray) -> np.ndarray:
         """
         Aggregate predictions from all trees in the forest.
 
@@ -196,19 +200,54 @@ class ReinforcementLearningTrees:
         Returns
         -------
         np.ndarray
-            Aggregated predictions (mean for regression, mode for classification).
+            Aggregated predictions (mean for regression, soft voting for classification).
         """
-        predictions = Parallel(n_jobs=self.n_jobs)(
-            delayed(tree.predict)(X) for tree in self.trees
-        )
-        predictions = np.array(predictions)
-
-        if self.task_type == "regression":
+        if self.task_type.lower() == "regression":
+            predictions = Parallel(n_jobs=self.n_jobs)(
+                delayed(tree.predict)(X) for tree in self.trees
+            )
+            predictions = np.array(predictions)
             return np.mean(predictions, axis=0)
         else:
-            most_frequent, _ = mode(predictions, axis=0, keepdims=False)
+            proba_list = Parallel(n_jobs=self.n_jobs)(
+                delayed(tree.predict_proba)(X, self.classes_) for tree in self.trees
+            )
+            avg_proba = np.mean(proba_list, axis=0)
+            return self.classes_[np.argmax(avg_proba, axis=1)]
 
-            return most_frequent.ravel()
+    def predict_proba(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        """
+        Predict class probabilities for X (classification only).
+
+        Uses soft voting by averaging probabilities across all trees.
+
+        Parameters
+        ----------
+        X : array-like
+            The input samples.
+
+        Returns
+        -------
+        np.ndarray of shape (n_samples, n_classes)
+            The class probabilities for each sample.
+
+        Raises
+        ------
+        ValueError
+            If called on a regression model.
+        """
+        if self.task_type.lower() == "regression":
+            raise ValueError(
+                "predict_proba is only available for classification tasks."
+            )
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        proba_list = Parallel(n_jobs=self.n_jobs)(
+            delayed(tree.predict_proba)(X, self.classes_) for tree in self.trees
+        )
+        return np.mean(proba_list, axis=0)
 
     def predict(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """

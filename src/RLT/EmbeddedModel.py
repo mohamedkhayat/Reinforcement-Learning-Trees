@@ -123,11 +123,12 @@ class EmbeddedModel:
         Tuple[float, np.ndarray] or None
             A tuple containing the MSE contribution and PMSE contributions, or None if split failed.
         """
-        rng = np.random.default_rng(self.seed)
+        rng = np.random.default_rng(seed)
         n_samples = X.shape[0]
         indices = np.arange(n_samples)
 
-        train_idx = rng.choice(indices, n_samples, replace=True)
+        train_size = int(0.85 * n_samples)
+        train_idx = rng.choice(indices, train_size, replace=False)
 
         mask = np.ones((n_samples), dtype=bool)
         mask[train_idx] = False
@@ -141,36 +142,39 @@ class EmbeddedModel:
         X_oob, y_oob = X_subset[test_idx, :], y[test_idx]
 
         params = {
-            "min_samples_split": self.min_samples_split,
-            "max_depth": self.max_depth,
+            "min_samples_split": 2,
+            "max_depth": None,
             "random_state": seed,
+            "max_features": None,
         }
-        if self.task_type == "classification":
+        if self.task_type.lower() == "classification":
             model = ExtraTreeClassifier(**params)
 
-        elif self.task_type == "regression":
+        elif self.task_type.lower() == "regression":
             model = ExtraTreeRegressor(**params)
+        else:
+            raise ValueError(f"Unknown task_type: {self.task_type}")
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_oob)
 
-        if self.task_type == "classification":
+        if self.task_type.lower() == "classification":
             mse_contribution = np.mean(y_pred != y_oob)
 
-        elif self.task_type == "regression":
+        elif self.task_type.lower() == "regression":
             mse_contribution = np.mean((y_oob - y_pred) ** 2)
 
         pmse_contributions = np.zeros(len(valid_features))
         for idx_variable in range(len(valid_features)):
             col = X_oob[:, idx_variable].copy()
-            np.random.shuffle(X_oob[:, idx_variable])
+            rng.shuffle(X_oob[:, idx_variable])
             y_pred = model.predict(X_oob)
             X_oob[:, idx_variable] = col
 
-            if self.task_type == "classification":
+            if self.task_type.lower() == "classification":
                 pmse_contributions[idx_variable] = np.mean(y_pred != y_oob)
 
-            elif self.task_type == "regression":
+            elif self.task_type.lower() == "regression":
                 pmse_contributions[idx_variable] = np.mean((y_oob - y_pred) ** 2)
 
         return mse_contribution, pmse_contributions

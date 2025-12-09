@@ -43,7 +43,7 @@ class ReinforcementLearningTree(ABC):
         muting_rate: float,
         min_protected: int,
         k: int,
-        alpha: int,
+        alpha: float,
         n_thresholds_to_try: int,
         max_depth: int,
         min_samples_split: int = 2,
@@ -62,11 +62,7 @@ class ReinforcementLearningTree(ABC):
         self.min_protected = min_protected
         self.n_thresholds_to_try = n_thresholds_to_try
         self.n_jobs = n_jobs
-        self._set_seed(random_state)
-
-    def _set_seed(self, seed: int) -> None:
-        """Set the random seed for reproducibility."""
-        np.random.seed(seed)
+        self.rng = np.random.default_rng(random_state)
 
     def _get_score(
         self,
@@ -131,7 +127,7 @@ class ReinforcementLearningTree(ABC):
             self.task_type,
             self.n_estimators,
             self.max_depth,
-            self.min_samples_split,
+            2,#self.min_samples_split,
             self.n_jobs,
             self.random_state,
         )
@@ -177,7 +173,7 @@ class ReinforcementLearningTree(ABC):
         if min_threshold >= max_threshold:
             return min_threshold
 
-        thresholds = np.random.uniform(
+        thresholds = self.rng.uniform(
             low=min_threshold, high=max_threshold, size=self.n_thresholds_to_try
         )
 
@@ -305,12 +301,17 @@ class ReinforcementLearningTree(ABC):
         # donc iwali noeud terminal
         # [0,1,2], [[0,1,2]]
         if (
-            depth >= self.max_depth
+            (self.max_depth and depth >= self.max_depth)
             or len(X) <= self.min_samples_split
             or len(np.unique(y)) == 1
         ):
             valeur = self._get_node_value(y)
-            return Node(valeur=valeur)
+            probabilities = (
+                self._get_node_probabilities(y)
+                if hasattr(self, "_get_node_probabilities")
+                else None
+            )
+            return Node(valeur=valeur, probabilities=probabilities)
 
         all_features = set(range(X.shape[1]))
         valid_features = list(all_features - muted_set)
@@ -326,7 +327,12 @@ class ReinforcementLearningTree(ABC):
 
         if best_features is None or len(best_features) == 0:
             valeur = self._get_node_value(y)
-            return Node(valeur=valeur)
+            probabilities = (
+                self._get_node_probabilities(y)
+                if hasattr(self, "_get_node_probabilities")
+                else None
+            )
+            return Node(valeur=valeur, probabilities=probabilities)
 
         best_threshold = self._find_best_threshold(X, y, best_features, coefficients)
 
@@ -336,11 +342,12 @@ class ReinforcementLearningTree(ABC):
         protected_set.update(best_features)
 
         num_features_to_mute = int(self.muting_rate * num_valid_features)
-        features_to_mute = variables_sorted_by_importance[-num_features_to_mute:]
 
-        for feature in features_to_mute:
-            if feature not in protected_set:
-                muted_set.add(feature)
+        muting_candidates = [f for f in valid_features if f not in protected_set]
+        muting_candidates_sorted = sorted(muting_candidates, key=lambda f: VI_scores.get(f, 0))
+        features_to_mute = muting_candidates_sorted[:num_features_to_mute] if num_features_to_mute > 0 else []
+
+        muted_set.update(features_to_mute)
 
         # valid_features = [2, 4, 8, 10, 11, 18]
         # best_feature   = 10
@@ -355,7 +362,12 @@ class ReinforcementLearningTree(ABC):
 
         if len(indice_left) == 0 or len(indice_right) == 0:
             valeur = self._get_node_value(y)
-            return Node(valeur=valeur)
+            probabilities = (
+                self._get_node_probabilities(y)
+                if hasattr(self, "_get_node_probabilities")
+                else None
+            )
+            return Node(valeur=valeur, probabilities=probabilities)
 
         x_left, y_left = X[indice_left, :], y[indice_left]
         x_right, y_right = X[indice_right, :], y[indice_right]
@@ -451,3 +463,62 @@ class ReinforcementLearningTree(ABC):
             return self._traverse_tree(x, node.left)
 
         return self._traverse_tree(x, node.right)
+
+    def _traverse_tree_proba(self, x: np.ndarray, node: Node) -> Dict[Any, float]:
+        """
+        Traverse the tree to get class probabilities for a single sample.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Input feature vector.
+        node : Node
+            Current node in the traversal.
+
+        Returns
+        -------
+        Dict[Any, float]
+            Dictionary mapping class labels to their probabilities.
+        """
+        if node.is_terminal():
+            return node.probabilities if node.probabilities is not None else {}
+
+        if np.dot(x[node.features], node.coefficients) <= node.threshold:
+            return self._traverse_tree_proba(x, node.left)
+
+        return self._traverse_tree_proba(x, node.right)
+
+    def predict_proba(
+        self, X: Union[pd.DataFrame, np.ndarray], classes: np.ndarray
+    ) -> np.ndarray:
+        """
+        Predict class probabilities for X.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The input samples.
+        classes : np.ndarray
+            Array of all possible class labels.
+
+        Returns
+        -------
+        np.ndarray of shape (n_samples, n_classes)
+            The class probabilities for each sample.
+        """
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        n_samples = X.shape[0]
+        n_classes = len(classes)
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+
+        proba = np.zeros((n_samples, n_classes))
+
+        for i, x in enumerate(X):
+            node_probs = self._traverse_tree_proba(x, self.root)
+            for cls, prob in node_probs.items():
+                if cls in class_to_idx:
+                    proba[i, class_to_idx[cls]] = prob
+
+        return proba

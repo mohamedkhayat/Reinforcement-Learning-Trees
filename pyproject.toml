@@ -15,5 +15,4 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]  # Looks in the root directory
-include = ["src*"]  # Specifically includes the 'src' folder
+where = ["src"]  # Looks in the root directory
