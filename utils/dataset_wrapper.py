@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 
@@ -44,7 +45,11 @@ class DatasetWrapper:
 
         self.type_target = config["type"]
 
-        self.df = pd.read_csv("../datasets/" + path, na_values=["?", "nan", "NaN", ""])
+        current_dir = os.path.dirname(os.path.abspath(_file_))
+        project_root = os.path.dirname(current_dir)
+        full_path = os.path.join(project_root, "datasets", path)
+
+        self.df = pd.read_csv(full_path, na_values=["?", "nan", "NaN", ""])
         self.df = self.df.drop_duplicates()
 
         all_numerics = self.df.select_dtypes(include=[np.number]).columns.tolist()

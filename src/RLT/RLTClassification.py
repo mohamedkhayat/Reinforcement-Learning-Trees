@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 import numpy as np
 from RLT.ReinforcementLearningTree import ReinforcementLearningTree
 
@@ -7,7 +7,8 @@ class RLTClassification(ReinforcementLearningTree):
     """
     Classification variant of Reinforcement Learning Tree.
 
-    Uses Gini impurity as the loss function and majority vote for prediction.
+    Uses Gini impurity as the loss function and soft voting (probability averaging)
+    for prediction when used in an ensemble.
     """
 
     def __init__(
@@ -94,3 +95,23 @@ class RLTClassification(ReinforcementLearningTree):
         idx = np.argmax(counts)
         label = values[idx]
         return label
+
+    def _get_node_probabilities(self, y: np.ndarray) -> Dict[Any, float]:
+        """
+        Compute class probabilities at a node.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Target values at this node.
+
+        Returns
+        -------
+        Dict[Any, float]
+            Dictionary mapping class labels to their probabilities.
+        """
+        if len(y) == 0:
+            return {}
+        classes, counts = np.unique(y, return_counts=True)
+        probs = counts / len(y)
+        return dict(zip(classes, probs))
