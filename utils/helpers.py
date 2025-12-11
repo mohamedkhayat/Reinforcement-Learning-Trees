@@ -1,10 +1,9 @@
+import os
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.stats import norm
 from scipy.linalg import toeplitz
 import pandas as pd
-from bokeh.io import export_png
-from bokeh.models import ColumnDataSource, DataTable, TableColumn
 
 
 def generate_scenario_data(
@@ -156,7 +155,7 @@ def save_df_as_image(df_raw, path, p_dim=200):
     """
     1. Prepares the raw RLT results into a flat table (filtering by P).
     2. Dynamically handles column names (so it works even if you only ran Scenario 1).
-    3. Saves as PNG using Bokeh.
+    3. Saves as PNG using Matplotlib (no browser dependency).
     """
 
     df = df_raw.copy()
@@ -217,19 +216,42 @@ def save_df_as_image(df_raw, path, p_dim=200):
 
     df_flat = df_flat.astype(str)
 
-    source = ColumnDataSource(df_flat)
-    columns_for_table = [TableColumn(field=col, title=col) for col in df_flat.columns]
+    os.makedirs(path, exist_ok=True)
+    filename = os.path.join(path, f"table_{p_dim}.png")
 
-    data_table = DataTable(
-        source=source,
-        columns=columns_for_table,
-        height_policy="auto",
-        width_policy="auto",
-        index_position=None,
+    n_rows, n_cols = df_flat.shape
+    fig_width = max(6, n_cols * 1.6)
+    fig_height = max(2.5, n_rows * 0.8)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
+    ax.axis("off")
+
+    table = ax.table(
+        cellText=df_flat.values,
+        colLabels=df_flat.columns,
+        loc="center",
+        cellLoc="center",
     )
 
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 1.4)
+
+    for (row, col), cell in table.get_celld().items():
+        cell.set_edgecolor("black")
+        cell.set_linewidth(0.5)
+        if row == 0:
+            cell.set_facecolor("#d9d9d9")
+            cell.get_text().set_weight("bold")
+
+    ax.set_title(f"RLT Results (p = {p_dim})", fontsize=12, fontweight="bold", pad=12)
+
+    fig.tight_layout()
+
     try:
-        export_png(data_table, filename=path + str(p_dim) + ".png")
-        print(f"Image saved to {path}")
+        fig.savefig(filename, bbox_inches="tight")
+        print(f"Image saved to {filename}")
     except Exception as e:
         print(f"Error saving image: {e}")
+    finally:
+        plt.close(fig)
