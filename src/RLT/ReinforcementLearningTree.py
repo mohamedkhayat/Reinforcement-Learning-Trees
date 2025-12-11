@@ -127,7 +127,7 @@ class ReinforcementLearningTree(ABC):
             self.task_type,
             self.n_estimators,
             self.max_depth,
-            2,#self.min_samples_split,
+            2,  # self.min_samples_split,
             self.n_jobs,
             self.random_state,
         )
@@ -145,39 +145,23 @@ class ReinforcementLearningTree(ABC):
     ) -> float:
         """
         Find the best threshold for the linear combination of features.
-
-        Parameters
-        ----------
-        X : np.ndarray
-            Input features.
-        y : np.ndarray
-            Target values.
-        best_features : list
-            Indices of the selected features.
-        coeffs : np.ndarray
-            Coefficients for the linear combination.
-
-        Returns
-        -------
-        float
-            The best threshold value found.
         """
         best_score = float("inf")
-        q = 0.2
 
         Z = np.dot(X[:, best_features], coeffs)
 
-        min_threshold = np.quantile(Z, q)
-        max_threshold = np.quantile(Z, 1 - q)
+        min_z = np.min(Z)
+        max_z = np.max(Z)
 
-        if min_threshold >= max_threshold:
-            return min_threshold
+        if min_z >= max_z:
+            return min_z
 
         thresholds = self.rng.uniform(
-            low=min_threshold, high=max_threshold, size=self.n_thresholds_to_try
+            low=min_z, high=max_z, size=self.n_thresholds_to_try
         )
 
         best_threshold = thresholds[0]
+        found_valid_split = False
 
         for threshold in thresholds:
             indice_left = np.where(Z <= threshold)[0]
@@ -187,9 +171,14 @@ class ReinforcementLearningTree(ABC):
                 continue
 
             score = self._get_score(y, indice_left, indice_right)
+
             if score < best_score:
                 best_score = score
                 best_threshold = threshold
+                found_valid_split = True
+
+        if not found_valid_split:
+            best_threshold = np.median(Z)
 
         return best_threshold
 
@@ -203,49 +192,28 @@ class ReinforcementLearningTree(ABC):
     ) -> Tuple[np.ndarray, List]:
         """
         Calculate coefficients for the linear combination split.
-
-        Parameters
-        ----------
-        X : np.ndarray
-            Input features.
-        y : np.ndarray
-            Target values.
-        valid_features : list
-            List of valid feature indices.
-        VI_scores : dict
-            Variable importance scores.
-        variables_sorted_by_importance : list
-            List of feature indices sorted by importance.
-
-        Returns
-        -------
-        Tuple[np.ndarray, list]
-            A tuple containing the coefficients array and the list of best feature indices.
+        Matches C implementation: Normalizes weights relative to the strongest variable.
         """
-        coeffs = []
-        best_features = []
-        if (
-            len(variables_sorted_by_importance) == 0
-            or variables_sorted_by_importance is None
-        ):
-            return np.zeros(
-                len(valid_features),
-            )
-
-        index_top_kth_vi = min(self.k, len(valid_features)) - 1
-        top_kth_vi = VI_scores[variables_sorted_by_importance[index_top_kth_vi]]
+        if not variables_sorted_by_importance:
+            return np.array([]), []
 
         max_vi = VI_scores[variables_sorted_by_importance[0]]
 
-        for col_idx in valid_features:
-            col_score = VI_scores[col_idx]
-            if (
-                col_score <= 0
-                or col_score < self.alpha * max_vi
-                or col_score < top_kth_vi
-            ):
-                continue
+        candidates = []
+        for var_idx in variables_sorted_by_importance:
+            if VI_scores[var_idx] < self.alpha * max_vi:
+                break
+            candidates.append(var_idx)
 
+        selected_vars = candidates[: self.k]
+
+        if not selected_vars:
+            selected_vars = [variables_sorted_by_importance[0]]
+
+        raw_coeffs = []
+        best_features = []
+
+        for col_idx in selected_vars:
             feature_col = X[:, col_idx]
 
             if np.std(feature_col) == 0 or np.std(y) == 0:
@@ -258,12 +226,23 @@ class ReinforcementLearningTree(ABC):
                 direction = 1
 
             magnitude = np.sqrt(VI_scores[col_idx])
-
             beta = direction * magnitude
-            coeffs.append(beta)
+
+            raw_coeffs.append(beta)
             best_features.append(col_idx)
 
-        return np.array(coeffs), best_features
+        if not raw_coeffs:
+            return np.array([]), []
+
+        first_coeff = raw_coeffs[0]
+
+        if abs(first_coeff) < 1e-9:
+            first_coeff = 1.0 if first_coeff >= 0 else -1.0
+
+        normalized_coeffs = [c / first_coeff for c in raw_coeffs]
+        normalized_coeffs[0] = 1.0
+
+        return np.array(normalized_coeffs), best_features
 
     def _build_tree(
         self,
@@ -344,8 +323,14 @@ class ReinforcementLearningTree(ABC):
         num_features_to_mute = int(self.muting_rate * num_valid_features)
 
         muting_candidates = [f for f in valid_features if f not in protected_set]
-        muting_candidates_sorted = sorted(muting_candidates, key=lambda f: VI_scores.get(f, 0))
-        features_to_mute = muting_candidates_sorted[:num_features_to_mute] if num_features_to_mute > 0 else []
+        muting_candidates_sorted = sorted(
+            muting_candidates, key=lambda f: VI_scores.get(f, 0)
+        )
+        features_to_mute = (
+            muting_candidates_sorted[:num_features_to_mute]
+            if num_features_to_mute > 0
+            else []
+        )
 
         muted_set.update(features_to_mute)
 

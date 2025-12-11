@@ -16,6 +16,9 @@ class Node:
         Right child node.
     valeur : Any, optional
         Prediction value if this is a terminal node.
+    probabilities : dict, optional
+        Class probabilities at this node (for classification tasks).
+        Maps class labels to their probabilities.
     """
 
     def __init__(
@@ -27,6 +30,7 @@ class Node:
         right=None,
         *,
         valeur=None,
+        probabilities=None,
     ):
         self.right = right
         self.left = left
@@ -34,6 +38,7 @@ class Node:
         self.valeur = valeur
         self.features = features
         self.threshold = threshold
+        self.probabilities = probabilities
 
     def is_terminal(self) -> bool:
         """

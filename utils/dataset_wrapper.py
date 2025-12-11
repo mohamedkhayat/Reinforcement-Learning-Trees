@@ -30,8 +30,18 @@ datasets_dict = {
         "target": "quality",
         "type": "Categorical",
     },
+    "wine_white": {
+        "path": "winequality-white.csv",
+        "target": "quality",
+        "type": "Categorical",
+    },
     "auto_mpg": {"path": "auto-mpg.csv", "target": "mpg", "type": "Continuous"},
     "housing": {"path": "housing.csv", "target": "MEDV", "type": "Continuous"},
+    "eighthr": {
+        "path": "eighthr.csv",
+        "target": "Class",
+        "type": "Categorical",
+    },
 }
 
 
@@ -68,3 +78,5 @@ class DatasetWrapper:
             for c in all_columns
             if (c not in self.quantitatives_variables and c not in cols_to_exclude)
         ]
+
+        self.clean_variables = []
