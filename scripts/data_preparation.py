@@ -15,6 +15,8 @@ def prepare_data(wrapper):
     cols_to_drop = missing_pct[missing_pct > 60].index
     X_clean = X.drop(columns=cols_to_drop)
 
+    wrapper.clean_variables = X_clean.columns.tolist()
+
     if X_clean.shape[1] > 0:
         row_missing_pct = X_clean.isnull().mean(axis=1)
         X_clean = X_clean[row_missing_pct <= 0.5]
@@ -23,7 +25,7 @@ def prepare_data(wrapper):
         y_clean = y
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_clean, y_clean, test_size=0.2, shuffle=True, random_state=42
+        X_clean, y_clean, train_size=150, shuffle=True, random_state=42
     )
 
     imputer = KNNImputer(n_neighbors=5)
