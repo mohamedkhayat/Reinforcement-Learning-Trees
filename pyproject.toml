@@ -15,7 +15,8 @@ dependencies = [
     "tqdm",
     "xgboost",
     "lime",
-    "shap"
+    "shap",
+    "jinja2"
 ]
 
 [tool.setuptools.packages.find]

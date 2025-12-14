@@ -2,6 +2,7 @@ from typing import Dict, Self, Union
 from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
+from scipy.stats import mode
 from RLT.RLTClassification import RLTClassification
 from RLT.RLTRegression import RLTRegression
 
@@ -69,6 +70,18 @@ class ReinforcementLearningTrees:
         self.n_jobs = n_jobs
         self.trees = []
 
+    @property
+    def feature_importances_(self):
+        import numpy as np
+
+        all_importances = []
+        for tree in self.trees:
+            if hasattr(tree, "variable_importances_"):
+                all_importances.append(tree.variable_importances_)
+        if not all_importances:
+            raise AttributeError("No variable_importances_ found in trees.")
+        return np.mean(all_importances, axis=0)
+
     def _fit_single_tree(
         self,
         X_boot: np.ndarray,
@@ -123,6 +136,9 @@ class ReinforcementLearningTrees:
         y : np.ndarray
             Training targets.
         """
+        if isinstance(y, pd.Series):
+            y = y.values
+
         if self.task_type.lower() == "classification":
             self.classes_ = np.unique(y)
         else:
@@ -202,18 +218,16 @@ class ReinforcementLearningTrees:
         np.ndarray
             Aggregated predictions (mean for regression, soft voting for classification).
         """
+        predictions = Parallel(n_jobs=self.n_jobs)(
+            delayed(tree.predict)(X) for tree in self.trees
+        )
         if self.task_type.lower() == "regression":
-            predictions = Parallel(n_jobs=self.n_jobs)(
-                delayed(tree.predict)(X) for tree in self.trees
-            )
             predictions = np.array(predictions)
             return np.mean(predictions, axis=0)
         else:
-            proba_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(tree.predict_proba)(X, self.classes_) for tree in self.trees
-            )
-            avg_proba = np.mean(proba_list, axis=0)
-            return self.classes_[np.argmax(avg_proba, axis=1)]
+            predictions = np.array(predictions)
+            majority_votes, _ = mode(predictions, axis=0, keepdims=False)
+            return majority_votes
 
     def predict_proba(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """

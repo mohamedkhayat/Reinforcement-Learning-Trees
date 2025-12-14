@@ -55,7 +55,7 @@ class DatasetWrapper:
 
         self.type_target = config["type"]
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        current_dir = os.path.dirname(os.path.abspath(_file_))
         project_root = os.path.dirname(current_dir)
         full_path = os.path.join(project_root, "datasets", path)
 
@@ -80,3 +80,4 @@ class DatasetWrapper:
         ]
 
         self.clean_variables = []
+        self.class_names = None
