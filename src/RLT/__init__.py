@@ -10,9 +10,9 @@ from RLT.RLTRegression import RLTRegression
 from RLT.RLTClassification import RLTClassification
 from RLT.ReinforcementLearningTrees import ReinforcementLearningTrees
 
-_version_ = "0.1.0"
+__version__ = "0.1.0"
 
-_all_ = [
+__all__ = [
     "Node",
     "EmbeddedModel",
     "ReinforcementLearningTree",

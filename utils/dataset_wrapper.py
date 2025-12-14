@@ -47,6 +47,7 @@ datasets_dict = {
 
 class DatasetWrapper:
     def __init__(self, name):
+        self.name = name
         config = datasets_dict[name]
         path = config["path"]
 
@@ -54,6 +55,9 @@ class DatasetWrapper:
         self.id_col = config.get("id_col", None)
 
         self.type_target = config["type"]
+        self.task_type = (
+            "classification" if config["type"] == "Categorical" else "regression"
+        )
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
@@ -81,3 +85,4 @@ class DatasetWrapper:
 
         self.clean_variables = []
         self.class_names = None
+        self.scaler = None

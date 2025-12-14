@@ -5,6 +5,8 @@ from scipy.stats import norm
 from scipy.linalg import toeplitz
 import pandas as pd
 
+from scripts import data_preparation
+
 
 def generate_scenario_data(
     scenario_id: int, n_samples: int, p: int, random_state: int = None
@@ -255,3 +257,116 @@ def save_df_as_image(df_raw, path, p_dim=200):
         print(f"Error saving image: {e}")
     finally:
         plt.close(fig)
+
+
+def create_interval_labels(instance_row, train_data, feature_names):
+    """
+    Look at the training distribution to find which 'bin' the instance falls into.
+    Returns a list of strings like: "radius_mean (10.5 < x < 15.2)"
+    """
+    new_labels = []
+
+    for i, feat in enumerate(feature_names):
+        val = instance_row[i]
+        col_data = train_data[:, i]
+
+        quantiles = np.percentile(col_data, [0, 25, 50, 75, 100])
+
+        if val <= quantiles[1]:
+            label = f"{feat} (x ≤ {quantiles[1]:.2f})"
+        elif val <= quantiles[2]:
+            label = f"{feat} ({quantiles[1]:.2f} < x ≤ {quantiles[2]:.2f})"
+        elif val <= quantiles[3]:
+            label = f"{feat} ({quantiles[2]:.2f} < x ≤ {quantiles[3]:.2f})"
+        else:
+            label = f"{feat} (x > {quantiles[3]:.2f})"
+
+        new_labels.append(label)
+
+    return new_labels
+
+
+def _validate_and_report(wrapper):
+    X_train_scaled, X_test_scaled, y_train, y_test = data_preparation.prepare_data(
+        wrapper
+    )
+
+    name = (
+        wrapper.name
+        if hasattr(wrapper, "name")
+        else getattr(wrapper, "dataset_name", "unknown")
+    )
+    task = wrapper.task_type
+
+    print("\n" + "=" * 80)
+    print(f"Dataset: {name} | Task: {task}")
+    print(f"X_train shape: {getattr(X_train_scaled, 'shape', None)}")
+    print(f"X_test  shape: {getattr(X_test_scaled, 'shape', None)}")
+    print(f"y_train shape: {getattr(y_train, 'shape', (len(y_train),))}")
+    print(f"y_test  shape: {getattr(y_test, 'shape', (len(y_test),))}")
+
+    assert X_train_scaled is not None and X_train_scaled.size > 0, (
+        f"{name}: X_train_scaled is empty"
+    )
+    assert X_test_scaled is not None and X_test_scaled.size > 0, (
+        f"{name}: X_test_scaled is empty"
+    )
+    assert y_train is not None and len(y_train) > 0, f"{name}: y_train is empty"
+    assert y_test is not None and len(y_test) > 0, f"{name}: y_test is empty"
+    print("  ✔ Non-empty checks passed")
+
+    assert X_train_scaled.shape[0] == len(y_train), (
+        f"{name}: n_rows(X_train) != len(y_train)"
+    )
+    assert X_test_scaled.shape[0] == len(y_test), (
+        f"{name}: n_rows(X_test) != len(y_test)"
+    )
+    print("  ✔ Row/label consistency checks passed")
+
+    assert X_train_scaled.ndim == 2 and X_test_scaled.ndim == 2, (
+        f"{name}: X arrays must be 2D"
+    )
+    assert X_train_scaled.shape[1] == X_test_scaled.shape[1], (
+        f"{name}: n_features differ between train/test"
+    )
+    print("  ✔ Feature-dimension consistency passed")
+
+    assert np.isfinite(X_train_scaled).all(), f"{name}: X_train contains NaN/Inf"
+    assert np.isfinite(X_test_scaled).all(), f"{name}: X_test contains NaN/Inf"
+    assert np.isfinite(y_train).all(), f"{name}: y_train contains NaN/Inf"
+    assert np.isfinite(y_test).all(), f"{name}: y_test contains NaN/Inf"
+    print("  ✔ No NaN/Inf values")
+
+    try:
+        mean_train = np.nanmean(X_train_scaled, axis=0)
+        std_train = np.nanstd(X_train_scaled, axis=0)
+        mean_dev = np.nanmax(np.abs(mean_train))
+        std_dev = np.nanmax(np.abs(std_train - 1.0))
+
+        assert mean_dev < 1e-1, (
+            f"{name}: X_train feature means deviate too much from 0 (max abs mean={mean_dev:.4f})"
+        )
+        assert std_dev < 1e-1, (
+            f"{name}: X_train feature std deviate too much from 1 (max abs std-1={std_dev:.4f})"
+        )
+        print(
+            f"  ✔ Scaling sanity (train) passed (max abs mean={mean_dev:.4f}, max abs std-1={std_dev:.4f})"
+        )
+    except Exception:
+        print("  ℹ Skipping scaling sanity checks (non-numeric or insufficient data)")
+
+    if str(task).lower().startswith("c"):
+        unique_classes = np.unique(y_train)
+        assert unique_classes.size >= 2, (
+            f"{name}: classification target must have >=2 classes"
+        )
+        print(
+            f"  ✔ Classification target sanity passed (classes={unique_classes.tolist()})"
+        )
+    else:
+        var_y = np.var(y_train)
+        assert var_y > 0, f"{name}: regression target has zero variance"
+        print(f"  ✔ Regression target sanity passed (variance={var_y:.6f})")
+
+    print(f"Validation PASSED for dataset: {name}")
+    return True

@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer
 from sklearn.model_selection import train_test_split
@@ -53,5 +51,7 @@ def prepare_data(wrapper):
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train_imputed)
     X_test_scaled = scaler.transform(X_test_imputed)
+
+    wrapper.scaler = scaler
 
     return X_train_scaled, X_test_scaled, y_train, y_test
