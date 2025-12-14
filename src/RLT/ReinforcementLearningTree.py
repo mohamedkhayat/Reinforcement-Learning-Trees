@@ -1,9 +1,9 @@
 import numpy as np
-from RLT.Node import Node
 import pandas as pd
 from typing import Any, Dict, Tuple, Union, List, Set
 from abc import ABC, abstractmethod
 from RLT.EmbeddedModel import EmbeddedModel
+from RLT.Node import Node
 
 
 class ReinforcementLearningTree(ABC):
@@ -105,7 +105,7 @@ class ReinforcementLearningTree(ABC):
 
     def _find_best_split(
         self, X: np.ndarray, y: np.ndarray, valid_features: List[int]
-    ) -> Tuple[int, int]:
+    ) -> Tuple[List[int], Dict[int, float]]:
         """
         Find the best features to split on using the embedded model.
 
@@ -123,13 +123,15 @@ class ReinforcementLearningTree(ABC):
         Tuple[List, dict]
             A tuple containing the list of variables sorted by importance and the dictionary of VI scores.
         """
+        embedded_seed = int(self.rng.integers(0, 10**9))
+
         embedded_model = EmbeddedModel(
             self.task_type,
             self.n_estimators,
             self.max_depth,
             2,  # self.min_samples_split,
             self.n_jobs,
-            self.random_state,
+            embedded_seed,
         )
 
         VI_scores = embedded_model.get_variables_importances(X, y, valid_features)
@@ -152,22 +154,38 @@ class ReinforcementLearningTree(ABC):
 
         min_z = np.min(Z)
         max_z = np.max(Z)
+        interval_length = max_z - min_z
 
-        if min_z >= max_z:
+        if interval_length <= 1e-9:
             return min_z
 
+        q = max(0.05, self.min_samples_split / (len(y) + 1))
+        q = min(q, 0.45)
+
+        margin = interval_length * q
+        lower_bound = min_z + margin
+        upper_bound = max_z - margin
+
+        if lower_bound >= upper_bound:
+            lower_bound = min_z
+            upper_bound = max_z
+
+        n_candidates = max(self.n_thresholds_to_try, 1)
         thresholds = self.rng.uniform(
-            low=min_z, high=max_z, size=self.n_thresholds_to_try
+            low=lower_bound, high=upper_bound, size=n_candidates
         )
 
         best_threshold = thresholds[0]
         found_valid_split = False
 
-        for threshold in thresholds:
-            indice_left = np.where(Z <= threshold)[0]
-            indice_right = np.where(Z > threshold)[0]
+        min_leaf = max(1, self.min_samples_split // 2)
 
-            if len(indice_left) == 0 or len(indice_right) == 0:
+        for threshold in thresholds:
+            mask_left = Z <= threshold
+            indice_left = np.where(mask_left)[0]
+            indice_right = np.where(~mask_left)[0]
+
+            if len(indice_left) < min_leaf or len(indice_right) < min_leaf:
                 continue
 
             score = self._get_score(y, indice_left, indice_right)
@@ -197,11 +215,15 @@ class ReinforcementLearningTree(ABC):
         if not variables_sorted_by_importance:
             return np.array([]), []
 
-        max_vi = VI_scores[variables_sorted_by_importance[0]]
+        max_vi = VI_scores.get(variables_sorted_by_importance[0], 0)
+
+        if max_vi <= 0:
+            return np.array([]), []
 
         candidates = []
         for var_idx in variables_sorted_by_importance:
-            if VI_scores[var_idx] < self.alpha * max_vi:
+            score = VI_scores.get(var_idx, 0)
+            if score <= 0 or score < self.alpha * max_vi:
                 break
             candidates.append(var_idx)
 
@@ -213,17 +235,43 @@ class ReinforcementLearningTree(ABC):
         raw_coeffs = []
         best_features = []
 
+        if self.task_type.lower() == "classification":
+            classes = np.unique(y)
+            if len(classes) < 2:
+                return np.array([]), []
+
         for col_idx in selected_vars:
             feature_col = X[:, col_idx]
+            random_direction = 1 if self.rng.random() > 0.5 else -1
+            if self.task_type.lower() == "classification":
+                classes = np.unique(y)
 
-            if np.std(feature_col) == 0 or np.std(y) == 0:
-                rho = 0
-            else:
-                rho = np.corrcoef(feature_col, y)[0, 1]
+                if len(classes) < 2:
+                    direction = 1
+                else:
+                    mask_1 = y == classes[1]
+                    mask_0 = y == classes[0]
 
-            direction = np.sign(rho)
-            if direction == 0:
-                direction = 1
+                    mean_1 = np.mean(feature_col[mask_1]) if np.any(mask_1) else 0
+                    mean_0 = np.mean(feature_col[mask_0]) if np.any(mask_0) else 0
+
+                    diff = mean_1 - mean_0
+
+                    if abs(diff) > 1e-9:
+                        direction = np.sign(diff)
+                    else:
+                        direction = random_direction
+
+            elif self.task_type.lower() == "regression":
+                if np.std(feature_col) < 1e-9 or np.std(y) < 1e-9:
+                    direction = random_direction
+                else:
+                    # np.corrcoef returns matrix [[1, r], [r, 1]]
+                    rho = np.corrcoef(feature_col, y)[0, 1]
+                    if abs(rho) > 1e-9:
+                        direction = np.sign(rho)
+                    else:
+                        direction = random_direction
 
             magnitude = np.sqrt(VI_scores[col_idx])
             beta = direction * magnitude
@@ -243,6 +291,44 @@ class ReinforcementLearningTree(ABC):
         normalized_coeffs[0] = 1.0
 
         return np.array(normalized_coeffs), best_features
+
+    def _find_standard_split(self, X, y, valid_features):
+        """
+        Fallback: Standard Random Forest greedy split logic.
+        Used when node is too small for Reinforcement Learning.
+        """
+        best_score = float("inf")
+        best_feature = []
+        best_threshold = None
+        best_coeff = None
+
+        n_features = len(valid_features)
+        mtry = int(np.sqrt(n_features))
+        mtry = max(1, min(mtry, n_features))
+
+        candidate_features = self.rng.choice(valid_features, mtry, replace=False)
+
+        for feat_idx in candidate_features:
+            coeffs = np.array([1.0])
+
+            threshold = self._find_best_threshold(X, y, [feat_idx], coeffs)
+
+            mask_left = X[:, feat_idx] <= threshold
+            indices_left = np.where(mask_left)[0]
+            indices_right = np.where(~mask_left)[0]
+
+            if len(indices_left) == 0 or len(indices_right) == 0:
+                continue
+
+            score = self._get_score(y, indices_left, indices_right)
+
+            if score < best_score:
+                best_score = score
+                best_feature = [feat_idx]
+                best_threshold = threshold
+                best_coeff = coeffs
+
+        return best_feature, best_threshold, best_coeff
 
     def _build_tree(
         self,
@@ -292,17 +378,38 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
+        n_node = len(y)
         all_features = set(range(X.shape[1]))
         valid_features = list(all_features - muted_set)
-        num_valid_features = len(valid_features)
 
-        variables_sorted_by_importance, VI_scores = self._find_best_split(
-            X, y, valid_features
-        )
+        # Check if we should use Reinforcement Learning or Fallback
+        if n_node >= self.min_samples_split and len(valid_features) > 1:
+            # 1. Run Embedded Model (RLT)
+            variables_sorted_by_importance, VI_scores = self._find_best_split(
+                X, y, valid_features
+            )
 
-        coefficients, best_features = self._get_coefficients(
-            X, y, valid_features, VI_scores, variables_sorted_by_importance
-        )
+            # 2. Try Linear Combination
+            coefficients, best_features = self._get_coefficients(
+                X, y, valid_features, VI_scores, variables_sorted_by_importance
+            )
+
+            # 3. Find Threshold
+            if best_features is not None and len(best_features) > 0:
+                best_threshold = self._find_best_threshold(
+                    X, y, best_features, coefficients
+                )
+            else:
+                # Fallback if VI <= 0
+                best_features, best_threshold, coefficients = self._find_standard_split(
+                    X, y, valid_features
+                )
+
+        else:
+            # Fallback: Node too small for Embedded Model
+            best_features, best_threshold, coefficients = self._find_standard_split(
+                X, y, valid_features
+            )
 
         if best_features is None or len(best_features) == 0:
             valeur = self._get_node_value(y)
@@ -313,30 +420,27 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
-        best_threshold = self._find_best_threshold(X, y, best_features, coefficients)
-
         if depth == 0:
-            protected_set.update(variables_sorted_by_importance[: self.min_protected])
+            if "variables_sorted_by_importance" in locals():
+                protected_set.update(
+                    variables_sorted_by_importance[: self.min_protected]
+                )
 
         protected_set.update(best_features)
 
-        num_features_to_mute = int(self.muting_rate * num_valid_features)
+        if "VI_scores" in locals():
+            num_valid = len(valid_features)
+            num_to_mute = int(self.muting_rate * num_valid)
 
-        muting_candidates = [f for f in valid_features if f not in protected_set]
-        muting_candidates_sorted = sorted(
-            muting_candidates, key=lambda f: VI_scores.get(f, 0)
-        )
-        features_to_mute = (
-            muting_candidates_sorted[:num_features_to_mute]
-            if num_features_to_mute > 0
-            else []
-        )
+            muting_candidates = [f for f in valid_features if f not in protected_set]
 
-        muted_set.update(features_to_mute)
+            muting_candidates.sort(key=lambda f: VI_scores.get(f, 0.0))
 
-        # valid_features = [2, 4, 8, 10, 11, 18]
-        # best_feature   = 10
-        # coefficients   = [10, 8.4, 7, 6,  2, 19]
+            newly_muted = set(muting_candidates[:num_to_mute])
+
+            next_muted_set = muted_set.union(newly_muted)
+        else:
+            next_muted_set = muted_set
 
         indice_left = np.where(
             np.dot(X[:, best_features], coefficients) <= best_threshold
@@ -358,10 +462,10 @@ class ReinforcementLearningTree(ABC):
         x_right, y_right = X[indice_right, :], y[indice_right]
 
         left_node = self._build_tree(
-            x_left, y_left, protected_set.copy(), muted_set.copy(), depth + 1
+            x_left, y_left, protected_set.copy(), next_muted_set.copy(), depth + 1
         )
         right_node = self._build_tree(
-            x_right, y_right, protected_set.copy(), muted_set.copy(), depth + 1
+            x_right, y_right, protected_set.copy(), next_muted_set.copy(), depth + 1
         )
 
         return Node(
@@ -402,6 +506,17 @@ class ReinforcementLearningTree(ABC):
             X = X.values
         if isinstance(y, pd.Series):
             y = y.values
+
+        all_features = set(range(X.shape[1]))
+        valid_features = list(all_features)
+
+        variables_sorted_by_importance, VI_scores = self._find_best_split(
+            X, y, valid_features
+        )
+
+        self.variable_importances_ = np.zeros(X.shape[1])
+        for idx in range(X.shape[1]):
+            self.variable_importances_[idx] = VI_scores.get(idx, 0.0)
 
         self.root = self._build_tree(X, y, set(), set(), depth=0)
         return self.root

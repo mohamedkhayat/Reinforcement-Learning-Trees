@@ -78,25 +78,34 @@ class EmbeddedModel:
             for i in range(self.n_estimators)
         )
 
-        somme_MSE = 0.0
-        somme_PMSE = np.zeros(len(valid_features))
+        sum_ratios = {feat_idx: 0.0 for feat_idx in valid_features}
+        valid_tree_count = 0
 
         for res in results:
             if res is None:
                 continue
-            mse, pmse = res
-            somme_MSE += mse
-            somme_PMSE += pmse
 
-        if somme_MSE == 0:
-            somme_MSE = 1e-10
+            base_mse, pmse_dict = res
+            if base_mse < 1e-10:
+                for local_idx, feat_idx in enumerate(valid_features):
+                    sum_ratios[feat_idx] += 1.0
+            else:
+                for local_idx, feat_idx in enumerate(valid_features):
+                    ratio = pmse_dict[local_idx] / base_mse
+                    sum_ratios[feat_idx] += ratio
+
+            valid_tree_count += 1
 
         vi_scores = {}
-        for idx_local, idx_global in enumerate(valid_features):
-            ratio = somme_PMSE[idx_local] / somme_MSE
-            vi = max(ratio - 1, 0)
-            vi_scores[idx_global] = vi
 
+        if valid_tree_count == 0:
+            return {feat: 0.0 for feat in valid_features}
+
+        for feat_idx in valid_features:
+            avg_ratio = sum_ratios[feat_idx] / valid_tree_count
+            vi = avg_ratio - 1
+
+            vi_scores[feat_idx] = vi
         return vi_scores
 
     def _fit_single_tree(
@@ -127,8 +136,7 @@ class EmbeddedModel:
         n_samples = X.shape[0]
         indices = np.arange(n_samples)
 
-        train_size = int(0.85 * n_samples)
-        train_idx = rng.choice(indices, train_size, replace=False)
+        train_idx = rng.choice(indices, n_samples, replace=True)
 
         mask = np.ones((n_samples), dtype=bool)
         mask[train_idx] = False
@@ -137,15 +145,16 @@ class EmbeddedModel:
         if len(test_idx) == 0:
             return None
 
-        X_subset = X[:, valid_features]
+        X_subset = X[:, valid_features].copy()
+
         X_train, y_train = X_subset[train_idx, :], y[train_idx]
         X_oob, y_oob = X_subset[test_idx, :], y[test_idx]
 
         params = {
-            "min_samples_split": 2,
+            "min_samples_split": self.min_samples_split,
             "max_depth": None,
             "random_state": seed,
-            "max_features": None,
+            "max_features": 0.5,
         }
         if self.task_type.lower() == "classification":
             model = ExtraTreeClassifier(**params)
@@ -165,16 +174,18 @@ class EmbeddedModel:
             mse_contribution = np.mean((y_oob - y_pred) ** 2)
 
         pmse_contributions = np.zeros(len(valid_features))
-        for idx_variable in range(len(valid_features)):
-            col = X_oob[:, idx_variable].copy()
-            rng.shuffle(X_oob[:, idx_variable])
+        for local_idx, global_idx in enumerate(valid_features):
+            col = X_oob[:, local_idx].copy()
+            rng.shuffle(X_oob[:, local_idx])
             y_pred = model.predict(X_oob)
-            X_oob[:, idx_variable] = col
+            X_oob[:, local_idx] = col
 
             if self.task_type.lower() == "classification":
-                pmse_contributions[idx_variable] = np.mean(y_pred != y_oob)
+                pmse = np.mean(y_pred != y_oob)
 
             elif self.task_type.lower() == "regression":
-                pmse_contributions[idx_variable] = np.mean((y_oob - y_pred) ** 2)
+                pmse = np.mean((y_oob - y_pred) ** 2)
+
+            pmse_contributions[local_idx] = pmse
 
         return mse_contribution, pmse_contributions
