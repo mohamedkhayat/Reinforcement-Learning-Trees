@@ -129,7 +129,7 @@ class ReinforcementLearningTree(ABC):
             self.task_type,
             self.n_estimators,
             self.max_depth,
-            2,  # self.min_samples_split,
+            self.min_samples_split,
             self.n_jobs,
             embedded_seed,
         )
@@ -204,7 +204,6 @@ class ReinforcementLearningTree(ABC):
         self,
         X: np.ndarray,
         y: np.ndarray,
-        valid_features: List[int],
         VI_scores: Dict[int, float],
         variables_sorted_by_importance: List[int],
     ) -> Tuple[np.ndarray, List]:
@@ -391,7 +390,7 @@ class ReinforcementLearningTree(ABC):
 
             # 2. Try Linear Combination
             coefficients, best_features = self._get_coefficients(
-                X, y, valid_features, VI_scores, variables_sorted_by_importance
+                X, y, VI_scores, variables_sorted_by_importance
             )
 
             # 3. Find Threshold
@@ -510,11 +509,10 @@ class ReinforcementLearningTree(ABC):
         all_features = set(range(X.shape[1]))
         valid_features = list(all_features)
 
-        variables_sorted_by_importance, VI_scores = self._find_best_split(
-            X, y, valid_features
-        )
+        _, VI_scores = self._find_best_split(X, y, valid_features)
 
         self.variable_importances_ = np.zeros(X.shape[1])
+
         for idx in range(X.shape[1]):
             self.variable_importances_[idx] = VI_scores.get(idx, 0.0)
 
