@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 
@@ -29,8 +30,18 @@ datasets_dict = {
         "target": "quality",
         "type": "Categorical",
     },
+    "wine_white": {
+        "path": "winequality-white.csv",
+        "target": "quality",
+        "type": "Categorical",
+    },
     "auto_mpg": {"path": "auto-mpg.csv", "target": "mpg", "type": "Continuous"},
     "housing": {"path": "housing.csv", "target": "MEDV", "type": "Continuous"},
+    "eighthr": {
+        "path": "eighthr.csv",
+        "target": "Class",
+        "type": "Categorical",
+    },
 }
 
 
@@ -44,7 +55,11 @@ class DatasetWrapper:
 
         self.type_target = config["type"]
 
-        self.df = pd.read_csv("../datasets/" + path, na_values=["?", "nan", "NaN", ""])
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        full_path = os.path.join(project_root, "datasets", path)
+
+        self.df = pd.read_csv(full_path, na_values=["?", "nan", "NaN", ""])
         self.df = self.df.drop_duplicates()
 
         all_numerics = self.df.select_dtypes(include=[np.number]).columns.tolist()
@@ -63,3 +78,5 @@ class DatasetWrapper:
             for c in all_columns
             if (c not in self.quantitatives_variables and c not in cols_to_exclude)
         ]
+
+        self.clean_variables = []

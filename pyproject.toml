@@ -11,9 +11,12 @@ dependencies = [
     "pandas==2.3.3",
     "scikit-learn==1.7.2",
     "seaborn==0.13.2",
-    "ipykernel"
+    "ipykernel",
+    "tqdm",
+    "xgboost",
+    "lime",
+    "shap"
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]  # Looks in the root directory
-include = ["src*"]  # Specifically includes the 'src' folder
+where = ["src"]  # Looks in the root directory
