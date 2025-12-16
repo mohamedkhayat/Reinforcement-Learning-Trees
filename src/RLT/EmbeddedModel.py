@@ -1,7 +1,15 @@
 from typing import Dict, List, Tuple
+import warnings
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
 import numpy as np
 from joblib import Parallel, delayed
+from lightgbm import LGBMClassifier, LGBMRegressor
+import lightgbm as lgb
+
+warnings.filterwarnings("ignore", message=".*X does not have valid feature names.*")
+warnings.filterwarnings(
+    "ignore", category=UserWarning, module="sklearn.utils.validation"
+)
 
 
 class EmbeddedModel:
@@ -27,6 +35,7 @@ class EmbeddedModel:
     def __init__(
         self,
         task_type: str,
+        model: str = "extra_trees",
         n_estimators: int = 30,
         max_depth: int = None,
         min_samples_split: int = 2,
@@ -34,6 +43,7 @@ class EmbeddedModel:
         seed: int = 42,
     ):
         self.n_estimators = n_estimators
+        self.model = model
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.task_type = task_type
@@ -132,60 +142,127 @@ class EmbeddedModel:
         Tuple[float, np.ndarray] or None
             A tuple containing the MSE contribution and PMSE contributions, or None if split failed.
         """
-        rng = np.random.default_rng(seed)
-        n_samples = X.shape[0]
-        indices = np.arange(n_samples)
 
-        train_idx = rng.choice(indices, n_samples, replace=True)
+        try:
+            rng = np.random.default_rng(seed)
+            n_samples = X.shape[0]
+            indices = np.arange(n_samples)
 
-        mask = np.ones((n_samples), dtype=bool)
-        mask[train_idx] = False
-        test_idx = indices[mask]
+            train_idx = rng.choice(indices, n_samples, replace=True)
 
-        if len(test_idx) == 0:
-            return None
+            mask = np.ones((n_samples), dtype=bool)
+            mask[train_idx] = False
+            test_idx = indices[mask]
 
-        X_subset = X[:, valid_features].copy()
+            if len(test_idx) == 0:
+                return None
 
-        X_train, y_train = X_subset[train_idx, :], y[train_idx]
-        X_oob, y_oob = X_subset[test_idx, :], y[test_idx]
-
-        params = {
-            "min_samples_split": self.min_samples_split,
-            "max_depth": None,
-            "random_state": seed,
-            "max_features": 0.5,
-        }
-        if self.task_type.lower() == "classification":
-            model = ExtraTreeClassifier(**params)
-
-        elif self.task_type.lower() == "regression":
-            model = ExtraTreeRegressor(**params)
-        else:
-            raise ValueError(f"Unknown task_type: {self.task_type}")
-
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_oob)
-
-        if self.task_type.lower() == "classification":
-            mse_contribution = np.mean(y_pred != y_oob)
-
-        elif self.task_type.lower() == "regression":
-            mse_contribution = np.mean((y_oob - y_pred) ** 2)
-
-        pmse_contributions = np.zeros(len(valid_features))
-        for local_idx, global_idx in enumerate(valid_features):
-            col = X_oob[:, local_idx].copy()
-            rng.shuffle(X_oob[:, local_idx])
-            y_pred = model.predict(X_oob)
-            X_oob[:, local_idx] = col
+            X_subset = X[:, valid_features].copy()
+            X_train, y_train = X_subset[train_idx, :], y[train_idx]
+            X_oob, y_oob = X_subset[test_idx, :], y[test_idx]
 
             if self.task_type.lower() == "classification":
-                pmse = np.mean(y_pred != y_oob)
+                unique_train = np.unique(y_train)
+
+                if len(unique_train) < 2:
+                    return None
+
+                unique_oob = np.unique(y_oob)
+                if not np.isin(unique_oob, unique_train).all():
+                    return None
+
+            ex_params = {
+                "min_samples_split": self.min_samples_split,
+                "max_depth": None,
+                "random_state": seed,
+                "max_features": 0.5,
+            }
+
+            lgbm_params = {
+                "n_estimators": 50,
+                "max_depth": self.max_depth if self.max_depth else 3,
+                "min_child_samples": max(1, int(0.1 * len(train_idx))),
+                "random_state": seed,
+                "n_jobs": 1,
+                "verbose": -1,
+                "silent": True,
+                "force_col_wise": True,
+            }
+
+            model_type_str = getattr(
+                self, "model_type", getattr(self, "model", "extratrees")
+            ).lower()
+
+            if self.task_type.lower() == "classification":
+                if model_type_str == "extratrees":
+                    model = ExtraTreeClassifier(**ex_params)
+                elif model_type_str == "lightgbm":
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        model = LGBMClassifier(**lgbm_params)
+                else:
+                    return None
 
             elif self.task_type.lower() == "regression":
-                pmse = np.mean((y_oob - y_pred) ** 2)
+                if model_type_str == "extratrees":
+                    model = ExtraTreeRegressor(**ex_params)
+                elif model_type_str == "lightgbm":
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        model = LGBMRegressor(**lgbm_params)
+                else:
+                    return None
+            else:
+                return None
 
-            pmse_contributions[local_idx] = pmse
+            if model_type_str == "lightgbm":
+                callbacks = [
+                    lgb.early_stopping(stopping_rounds=5, verbose=False),
+                    lgb.log_evaluation(period=0),
+                ]
 
-        return mse_contribution, pmse_contributions
+                metric = (
+                    "binary_logloss"
+                    if self.task_type.lower() == "classification"
+                    else "l2"
+                )
+
+                model.fit(
+                    X_train.values,
+                    y_train,
+                    eval_set=[(X_oob, y_oob)],
+                    eval_metric=metric,
+                    callbacks=callbacks,
+                )
+            else:
+                model.fit(X_train, y_train)
+
+            y_pred = model.predict(X_oob)
+
+            if self.task_type.lower() == "classification":
+                base_error = np.mean(y_pred != y_oob)
+            elif self.task_type.lower() == "regression":
+                base_error = np.mean((y_oob - y_pred) ** 2)
+
+            if base_error < 1e-15:
+                return 0.0, np.zeros(len(valid_features))
+
+            pmse_contributions = np.zeros(len(valid_features))
+            for local_idx, global_idx in enumerate(valid_features):
+                original_col = X_oob[:, local_idx].copy()
+                rng.shuffle(X_oob[:, local_idx])
+
+                y_pred_perm = model.predict(X_oob)
+                X_oob[:, local_idx] = original_col
+
+                if self.task_type.lower() == "classification":
+                    pmse = np.mean(y_pred_perm != y_oob)
+                elif self.task_type.lower() == "regression":
+                    pmse = np.mean((y_oob - y_pred_perm) ** 2)
+
+                pmse_contributions[local_idx] = pmse
+
+            return base_error, pmse_contributions
+
+        except Exception:
+            return None

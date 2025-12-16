@@ -44,6 +44,7 @@ class ReinforcementLearningTrees:
     def __init__(
         self,
         task_type: str,
+        embedded_model: str = "extra_trees",
         n_rlt_trees: int = 10,
         n_extra_trees: int = 100,
         muting_rate: float = 0.5,
@@ -57,6 +58,7 @@ class ReinforcementLearningTrees:
         random_state: int = 42,
     ):
         self.task_type = task_type
+        self.embedded_model = embedded_model
         self.n_rlt_trees = n_rlt_trees
         self.n_extra_trees = n_extra_trees
         self.muting_rate = muting_rate
@@ -158,6 +160,7 @@ class ReinforcementLearningTrees:
 
         tree_params = {
             "n_estimators": self.n_extra_trees,
+            "embedded_model": self.embedded_model,
             "muting_rate": self.muting_rate,
             "min_protected": self.min_protected,
             "k": self.k,
