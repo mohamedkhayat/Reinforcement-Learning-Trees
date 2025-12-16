@@ -15,7 +15,8 @@ dependencies = [
     "tqdm",
     "xgboost",
     "lime",
-    "shap"
+    "shap",
+    "lightgbm[scikit-learn]"
 ]
 
 [tool.setuptools.packages.find]
