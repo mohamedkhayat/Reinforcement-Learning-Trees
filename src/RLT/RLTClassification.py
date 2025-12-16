@@ -14,6 +14,7 @@ class RLTClassification(ReinforcementLearningTree):
     def __init__(
         self,
         task_type: str,
+        embedded_model: str,
         n_estimators: int,
         muting_rate: float,
         min_protected: int,
@@ -27,6 +28,7 @@ class RLTClassification(ReinforcementLearningTree):
     ):
         super().__init__(
             task_type,
+            embedded_model,
             n_estimators,
             muting_rate,
             min_protected,

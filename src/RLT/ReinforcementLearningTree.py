@@ -39,6 +39,7 @@ class ReinforcementLearningTree(ABC):
     def __init__(
         self,
         task_type: str,
+        embedded_model: str,
         n_estimators: int,
         muting_rate: float,
         min_protected: int,
@@ -51,6 +52,7 @@ class ReinforcementLearningTree(ABC):
         n_jobs: int = 1,
     ) -> None:
         self.max_depth = max_depth
+        self.embedded_model = embedded_model
         self.min_samples_split = min_samples_split
         self.root = None
         self.random_state = random_state
@@ -127,6 +129,7 @@ class ReinforcementLearningTree(ABC):
 
         embedded_model = EmbeddedModel(
             self.task_type,
+            self.embedded_model,
             self.n_estimators,
             self.max_depth,
             self.min_samples_split,
@@ -162,9 +165,8 @@ class ReinforcementLearningTree(ABC):
         q = max(0.05, self.min_samples_split / (len(y) + 1))
         q = min(q, 0.45)
 
-        margin = interval_length * q
-        lower_bound = min_z + margin
-        upper_bound = max_z - margin
+        lower_bound = np.quantile(Z, q)
+        upper_bound = np.quantile(Z, 1 - q)
 
         if lower_bound >= upper_bound:
             lower_bound = min_z
@@ -457,8 +459,8 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
-        x_left, y_left = X[indice_left, :], y[indice_left]
-        x_right, y_right = X[indice_right, :], y[indice_right]
+        x_left, y_left = X[indice_left,:], y[indice_left]
+        x_right, y_right = X[indice_right,:], y[indice_right]
 
         left_node = self._build_tree(
             x_left, y_left, protected_set.copy(), next_muted_set.copy(), depth + 1
