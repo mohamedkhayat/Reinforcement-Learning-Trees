@@ -65,7 +65,7 @@ class DatasetWrapper:
             "classification" if config["type"] == "Categorical" else "regression"
         )
 
-        current_dir = os.path.dirname(os.path.abspath(_file_))
+        current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         full_path = os.path.join(project_root, "datasets", path)
 

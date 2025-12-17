@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import norm
 from scipy.linalg import toeplitz
 import pandas as pd
-
+import matplotlib.patches as mpatches
 from scripts import data_preparation
 
 
@@ -370,3 +370,69 @@ def _validate_and_report(wrapper):
 
     print(f"Validation PASSED for dataset: {name}")
     return True
+
+
+def show_global_feature_importances(feature_names, feature_importances):
+    features_df = pd.DataFrame(
+    {"Feature": feature_names, "Importance": feature_importances}
+    )
+    features_df = features_df.sort_values(by="Importance", ascending=True).reset_index(
+        drop=True
+    )
+
+    colors = []
+    n_features = len(features_df)
+    top_k = 5
+
+    for i in range(n_features):
+        score = features_df.loc[i, "Importance"]
+
+        is_top_k = i >= (n_features - top_k)
+
+        if is_top_k:
+            colors.append("#2ca02c")
+        elif score > 1e-5:
+            colors.append("#1f77b4")
+        else:
+            colors.append("lightgray")
+
+    plt.figure(figsize=(10, 10))
+    bars = plt.barh(
+        features_df["Feature"],
+        features_df["Importance"],
+        color=colors,
+        edgecolor="grey",
+        linewidth=0.3,
+    )
+
+    first_nonzero_idx = features_df[features_df["Importance"] > 1e-5].index[0]
+
+    if first_nonzero_idx > 0:
+        plt.axhline(
+            y=first_nonzero_idx - 0.5, color="red", linestyle="--", linewidth=1, alpha=0.5
+        )
+        plt.text(
+            features_df["Importance"].max() * 0.8,
+            first_nonzero_idx - 0.5,
+            " Zero Importance Threshold",
+            va="center",
+            color="red",
+            fontsize=9,
+        )
+
+
+    n_zero = (features_df["Importance"] <= 1e-5).sum()
+    n_weak = n_features - n_zero - top_k
+
+    legend_handles = [
+        mpatches.Patch(color="#2ca02c", label=f"Dominant Signal (Top {top_k})"),
+        mpatches.Patch(color="#1f77b4", label=f"Weak Signal ({n_weak} vars)"),
+        mpatches.Patch(color="lightgray", label=f"Muted / Noise ({n_zero} vars)"),
+    ]
+    plt.legend(handles=legend_handles, loc="lower right")
+
+    plt.title("Global Feature Importance: Signal vs. Noise")
+    plt.xlabel("Permutation Importance Score")
+    plt.grid(axis="x", linestyle="--", alpha=0.3)
+    plt.tight_layout()
+    plt.show()

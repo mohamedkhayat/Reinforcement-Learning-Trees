@@ -116,6 +116,7 @@ class EmbeddedModel:
             vi = avg_ratio - 1
 
             vi_scores[feat_idx] = vi
+            
         return vi_scores
 
     def _fit_single_tree(
@@ -146,10 +147,11 @@ class EmbeddedModel:
         try:
             rng = np.random.default_rng(seed)
             n_samples = X.shape[0]
-            indices = np.arange(n_samples)
-
-            train_idx = rng.choice(indices, n_samples, replace=True)
-
+            indices = np.arange(n_samples) # [0, 1, 2, 3, 4, ..., n_samples - 1]
+                                                                     # X : 10 lignes
+            train_idx = rng.choice(indices, n_samples, replace=True) # train_idx :               [0,0,0, 1, 2 ,2 ,2 ,3 ,4 ,5 ,5]
+                                                                     # mask      :               [0,0,0, 0, 0 ,0 ,1 ,1 ,1 ,1 ,1]
+                                                                     # mask[train_idx] = False : [1,1,1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1]
             mask = np.ones((n_samples), dtype=bool)
             mask[train_idx] = False
             test_idx = indices[mask]
@@ -183,7 +185,7 @@ class EmbeddedModel:
             }
 
             lgbm_params = {
-                "n_estimators": 50,
+                "n_estimators": 25,
                 "max_depth": self.max_depth if self.max_depth else 3,
                 "min_child_samples": max(1, int(0.1 * len(train_idx))),
                 "random_state": seed,
@@ -211,7 +213,7 @@ class EmbeddedModel:
                         warnings.simplefilter("ignore")
                         model = LGBMRegressor(**lgbm_params)
                 else:
-                    return None
+                    raise ValueError("Model not recognised")
             else:
                 return None
 

@@ -223,7 +223,7 @@ class ReinforcementLearningTree(ABC):
         """
         best_score = float("inf")
 
-        Z = np.dot(X[:, best_features], coeffs)
+        Z = np.dot(X[:, best_features], coeffs) # b1 x X1 +  b2 x X2 .... bk x Xk + 0
 
         min_z = np.min(Z)
         max_z = np.max(Z)
@@ -234,14 +234,15 @@ class ReinforcementLearningTree(ABC):
 
         q = max(0.05, self.min_samples_split / (len(y) + 1))
         q = min(q, 0.45)
-
+                
         lower_bound = np.quantile(Z, q)
         upper_bound = np.quantile(Z, 1 - q)
 
-        if lower_bound >= upper_bound:
-            lower_bound = min_z
-            upper_bound = max_z
+        interval_length = upper_bound - lower_bound
 
+        if interval_length <= 1e-9:
+            return lower_bound
+        
         n_candidates = max(self.n_thresholds_to_try, 1)
         thresholds = self.rng.uniform(
             low=lower_bound, high=upper_bound, size=n_candidates
@@ -296,6 +297,7 @@ class ReinforcementLearningTree(ABC):
             score = VI_scores.get(var_idx, 0)
             if score <= 0 or score < self.alpha * max_vi:
                 break
+            
             candidates.append(var_idx)
 
         selected_vars = candidates[: self.k]
@@ -442,11 +444,13 @@ class ReinforcementLearningTree(ABC):
             or len(np.unique(y)) == 1
         ):
             valeur = self._get_node_value(y)
-            probabilities = (
-                self._get_node_probabilities(y)
-                if hasattr(self, "_get_node_probabilities")
-                else None
-            )
+            probabilities = None
+            if self.task_type.lower() == "classification":
+                probabilities = (
+                    self._get_node_probabilities(y)
+                    if hasattr(self, "_get_node_probabilities")
+                    else None
+                )
             return Node(valeur=valeur, probabilities=probabilities)
 
         if depth == 0:
@@ -457,7 +461,7 @@ class ReinforcementLearningTree(ABC):
 
         all_features = set(range(X.shape[1]))
         valid_features = list(all_features - muted_set)
-
+        
         if n_node >= self.min_samples_split and len(valid_features) > 1:
             self.vi_split_count += 1
             variables_sorted_by_importance, VI_scores = self._find_best_split(
@@ -467,7 +471,7 @@ class ReinforcementLearningTree(ABC):
             coefficients, best_features = self._get_coefficients(
                 X, y, VI_scores, variables_sorted_by_importance
             )
-
+    
             if best_features is not None and len(best_features) > 0:
                 best_threshold = self._find_best_threshold(
                     X, y, best_features, coefficients
@@ -509,14 +513,14 @@ class ReinforcementLearningTree(ABC):
         protected_set.update(best_features)
 
         if "VI_scores" in locals():
-            num_valid = len(valid_features)
-            num_to_mute = int(self.muting_rate * num_valid)
-
+            #num_valid = len(valid_features)
+            #num_to_mute = int(self.muting_rate * num_valid)
+    
             muting_candidates = [f for f in VI_scores.keys() if f not in protected_set]
-
+            num_to_mute = int(self.muting_rate * len(muting_candidates))
             muting_candidates.sort(key=lambda f: VI_scores.get(f, 0.0))
 
-            newly_muted = set(muting_candidates[:num_to_mute])
+            newly_muted = set(muting_candidates[:num_to_mute]) # muting candidates : [2, 4, 1, 3, 10] # vi _scores : [0.1, 0.15, 0.2, 0.4, 0.7]
 
             next_muted_set = muted_set.union(newly_muted)
         else:
@@ -739,4 +743,4 @@ class ReinforcementLearningTree(ABC):
                 if cls in class_to_idx:
                     proba[i, class_to_idx[cls]] = prob
 
-        return proba    
+        return proba
