@@ -6,7 +6,7 @@ from scipy.linalg import toeplitz
 import pandas as pd
 import matplotlib.patches as mpatches
 from scripts import data_preparation
-
+import matplotlib.image as mpimg
 
 def generate_scenario_data(
     scenario_id: int, n_samples: int, p: int, random_state: int = None
@@ -148,7 +148,7 @@ def format_table(df_results, p_dim=200):
                 ],
             },
         ]
-    ).set_caption(f"Table 4: Classification/prediction error (SD), p = {p_dim}")
+    ).set_caption(f"Table : Classification/prediction error (SD), p = {p_dim}")
 
     return styler
 
@@ -374,7 +374,7 @@ def _validate_and_report(wrapper):
 
 def show_global_feature_importances(feature_names, feature_importances):
     features_df = pd.DataFrame(
-    {"Feature": feature_names, "Importance": feature_importances}
+        {"Feature": feature_names, "Importance": feature_importances}
     )
     features_df = features_df.sort_values(by="Importance", ascending=True).reset_index(
         drop=True
@@ -409,7 +409,11 @@ def show_global_feature_importances(feature_names, feature_importances):
 
     if first_nonzero_idx > 0:
         plt.axhline(
-            y=first_nonzero_idx - 0.5, color="red", linestyle="--", linewidth=1, alpha=0.5
+            y=first_nonzero_idx - 0.5,
+            color="red",
+            linestyle="--",
+            linewidth=1,
+            alpha=0.5,
         )
         plt.text(
             features_df["Importance"].max() * 0.8,
@@ -419,7 +423,6 @@ def show_global_feature_importances(feature_names, feature_importances):
             color="red",
             fontsize=9,
         )
-
 
     n_zero = (features_df["Importance"] <= 1e-5).sum()
     n_weak = n_features - n_zero - top_k
@@ -435,4 +438,69 @@ def show_global_feature_importances(feature_names, feature_importances):
     plt.xlabel("Permutation Importance Score")
     plt.grid(axis="x", linestyle="--", alpha=0.3)
     plt.tight_layout()
+    plt.show()
+
+def display_tables_side_by_side(base_path, p):
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+    import os
+    import numpy as np
+
+    def trim_whitespace(img, padding=10):
+        """Crops out the white background from an image array."""
+        if len(img.shape) == 3:
+            is_white = np.all(img > 0.95, axis=-1)
+        else:
+            is_white = img > 0.95
+
+        non_white_rows = np.where(~np.all(is_white, axis=1))[0]
+        non_white_cols = np.where(~np.all(is_white, axis=0))[0]
+
+        if len(non_white_rows) == 0 or len(non_white_cols) == 0:
+            return img
+
+        y1, y2 = non_white_rows[0], non_white_rows[-1]
+        x1, x2 = non_white_cols[0], non_white_cols[-1]
+
+        h, w = img.shape[:2]
+        y1, y2 = max(0, y1-padding), min(h, y2+padding)
+        x1, x2 = max(0, x1-padding), min(w, x2+padding)
+
+        return img[y1:y2, x1:x2]
+
+    # Map p to the R table index
+    r_index_map = {200: 4, 500: 5, 1000: 6}
+    r_idx = r_index_map.get(p, "")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+    
+    path1 = os.path.join(base_path, f'python_table_p{p}.png')
+    path2 = os.path.join(base_path, f'r_package_table{r_idx}_p{p}.png')
+    
+    # --- Python Table ---
+    try:
+        img1 = mpimg.imread(path1)
+        axes[0].imshow(trim_whitespace(img1))
+        # Added Title Here
+        axes[0].set_title("Our Implementation (Python)", fontsize=14, fontweight='bold', pad=15)
+    except Exception as e:
+        axes[0].text(0.5, 0.5, f'Missing:\n{os.path.basename(path1)}', ha='center', va='center')
+        axes[0].set_title("Our Implementation (Missing)", fontsize=14, fontweight='bold')
+    
+    # --- R Table ---
+    try:
+        img2 = mpimg.imread(path2)
+        axes[1].imshow(trim_whitespace(img2))
+        # Added Title Here
+        axes[1].set_title("Official R Package", fontsize=14, fontweight='bold', pad=15)
+    except Exception as e:
+        axes[1].text(0.5, 0.5, f'Missing:\n{os.path.basename(path2)}', ha='center', va='center')
+        axes[1].set_title("Official R Package (Missing)", fontsize=14, fontweight='bold')
+
+    # Formatting to ensure alignment
+    for ax in axes:
+        ax.axis('off')
+        ax.set_anchor('N') 
+
+    plt.subplots_adjust(wspace=0.1) # Slight gap between tables
     plt.show()
