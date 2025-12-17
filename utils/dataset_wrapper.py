@@ -42,6 +42,12 @@ datasets_dict = {
         "target": "Class",
         "type": "Categorical",
     },
+    "parkinsons_updrs": {
+        "path": "parkinsons_updrs.csv",
+        "target": "total_UPDRS",
+        "id_col": "subject#",
+        "type": "Continuous",
+    },
 }
 
 
@@ -59,7 +65,7 @@ class DatasetWrapper:
             "classification" if config["type"] == "Categorical" else "regression"
         )
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        current_dir = os.path.dirname(os.path.abspath(_file_))
         project_root = os.path.dirname(current_dir)
         full_path = os.path.join(project_root, "datasets", path)
 
