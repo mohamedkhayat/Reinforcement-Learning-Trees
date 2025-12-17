@@ -327,7 +327,12 @@ class ReinforcementLearningTrees:
         np.ndarray
             The predicted values.
         """
-        return self._aggregate_results(X)
+        if self.task_type.lower() == "classification":
+            # Use argmax of averaged probabilities for consistency with predict_proba
+            proba = self.predict_proba(X)
+            return self.classes_[np.argmax(proba, axis=1)]
+        else:
+            return self._aggregate_results(X)
 
     def print_split_statistics(self):
         """Print detailed statistics about VI vs fallback split usage."""

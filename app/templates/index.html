@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RLT vs Random Forest - Model Comparison</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E86AB;
+            --secondary-color: #A23B72;
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+        }
+        
+        body {
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(0, 0, 0, 0.3) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .hero-section {
+            padding: 40px 0 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .hero-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .hero-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .main-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+        
+        .form-select, .form-control {
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            padding: 10px 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-select:focus, .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(46, 134, 171, 0.25);
+        }
+        
+        .btn-run {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            padding: 12px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-run:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(46, 134, 171, 0.4);
+            color: white;
+        }
+        
+        .btn-predict {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            padding: 12px 40px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+            color: white;
+        }
+        
+        .dataset-info {
+            background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin-right: 8px;
+            margin-bottom: 5px;
+            display: inline-block;
+        }
+        
+        .results-section {
+            display: none;
+        }
+        
+        .results-section.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .metric-card.rlt {
+            border-top: 4px solid var(--primary-color);
+        }
+        
+        .metric-card.rf {
+            border-top: 4px solid var(--secondary-color);
+        }
+        
+        .metric-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+        
+        .metric-title.rlt { color: var(--primary-color); }
+        .metric-title.rf { color: var(--secondary-color); }
+        
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .metric-item:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-name {
+            font-weight: 500;
+            color: #666;
+        }
+        
+        .metric-value {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        
+        .plot-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .plot-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .plot-img {
+            width: 100%;
+            border-radius: 10px;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        
+        .feature-table {
+            width: 100%;
+        }
+        
+        .feature-table th {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 12px;
+            font-weight: 600;
+        }
+        
+        .feature-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .feature-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.show {
+            display: flex;
+        }
+        
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 25px;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .nav-tabs {
+            border-bottom: none;
+            margin-bottom: 15px;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            background: #f0f0f0;
+            color: #666;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-right: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            background: #e0e0e0;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+        
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .summary-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .summary-item i {
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+        
+        .prediction-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            border: 2px solid #dee2e6;
+        }
+        
+        .prediction-result {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .prediction-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .prediction-card.rlt {
+            background: linear-gradient(135deg, rgba(46, 134, 171, 0.1), rgba(46, 134, 171, 0.2));
+            border: 2px solid var(--primary-color);
+        }
+        
+        .prediction-card.rf {
+            background: linear-gradient(135deg, rgba(162, 59, 114, 0.1), rgba(162, 59, 114, 0.2));
+            border: 2px solid var(--secondary-color);
+        }
+        
+        .prediction-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        .param-group {
+            background: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .param-group-title {
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-tree me-2"></i>RLT Comparison
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <h1 class="hero-title">
+                <i class="fas fa-chart-bar me-3"></i>
+                Reinforcement Learning Trees vs Random Forest
+            </h1>
+            <p class="hero-subtitle">
+                Compare model performance and feature importance across different datasets
+            </p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="main-card">
+            <!-- Configuration Form -->
+            <div class="form-section">
+                <h3 class="mb-4"><i class="fas fa-cog me-2"></i>Configuration</h3>
+                <form id="configForm">
+                    <!-- Dataset Selection -->
+                    <div class="param-group">
+                        <div class="param-group-title"><i class="fas fa-database me-2"></i>Dataset Selection</div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="datasetSelect" class="form-label">Select Dataset</label>
+                                <select class="form-select" id="datasetSelect" name="dataset" required>
+                                    <option value="">Choose a dataset...</option>
+                                    {% for dataset in datasets %}
+                                    <option value="{{ dataset.name }}" data-task="{{ dataset.task_type }}">
+                                        {{ dataset.description }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="randomState" class="form-label">Random State</label>
+                                <input type="number" class="form-control" id="randomState" name="random_state" 
+                                       value="42" min="0" max="9999">
+                            </div>
+                        </div>
+                        
+                        <!-- Dataset Info -->
+                        <div id="datasetInfo" class="dataset-info" style="display: none;">
+                            <h6><i class="fas fa-info-circle me-2"></i>Dataset Information</h6>
+                            <div id="datasetInfoContent"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- RLT Parameters -->
+                    <div class="param-group">
+                        <div class="param-group-title"><i class="fas fa-brain me-2"></i>RLT Model Parameters</div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="nRltTrees" class="form-label">Number of RLT Trees</label>
+                                <input type="number" class="form-control" id="nRltTrees" name="n_rlt_trees" 
+                                       value="50" min="10" max="200">
+                                <small class="text-muted">Number of trees in the forest</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="nExtraTrees" class="form-label">Extra Trees (Embedded)</label>
+                                <input type="number" class="form-control" id="nExtraTrees" name="n_extra_trees" 
+                                       value="100" min="10" max="300">
+                                <small class="text-muted">Trees in embedded model</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="mutingRate" class="form-label">Muting Rate</label>
+                                <input type="number" class="form-control" id="mutingRate" name="muting_rate" 
+                                       value="0.5" min="0" max="0.9" step="0.1">
+                                <small class="text-muted">Rate of feature muting (0-0.9)</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="kValue" class="form-label">K (Linear Combination)</label>
+                                <input type="number" class="form-control" id="kValue" name="k" 
+                                       value="4" min="1" max="10">
+                                <small class="text-muted">Number of top features for splits</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Computed Parameters</label>
+                                <div class="form-control bg-light" style="height: auto;">
+                                    <small><strong>min_samples_split:</strong> n<sup>1/3</sup> (auto-computed)</small><br>
+                                    <small><strong>min_protected:</strong> log(p) (auto-computed)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-run" id="runBtn">
+                            <i class="fas fa-play me-2"></i>Run Comparison
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="results-section">
+                <!-- Summary -->
+                <div class="summary-box" id="summaryBox">
+                    <h4><i class="fas fa-clipboard-list me-2"></i>Analysis Summary</h4>
+                    <div class="row mt-3" id="summaryContent"></div>
+                </div>
+
+                <!-- Metrics Cards -->
+                <h3 class="mb-4"><i class="fas fa-chart-line me-2"></i>Model Performance</h3>
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="metric-card rlt">
+                            <h4 class="metric-title rlt">
+                                <i class="fas fa-brain me-2"></i>RLT Model
+                            </h4>
+                            <div id="rltMetrics"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="metric-card rf">
+                            <h4 class="metric-title rf">
+                                <i class="fas fa-tree me-2"></i>Random Forest
+                            </h4>
+                            <div id="rfMetrics"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs for plots -->
+                <ul class="nav nav-tabs" id="plotTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="comparison-tab" data-bs-toggle="tab" 
+                                data-bs-target="#comparison" type="button">
+                            <i class="fas fa-chart-bar me-2"></i>Comparison
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="individual-tab" data-bs-toggle="tab" 
+                                data-bs-target="#individual" type="button">
+                            <i class="fas fa-layer-group me-2"></i>Individual Plots
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="table-tab" data-bs-toggle="tab" 
+                                data-bs-target="#table" type="button">
+                            <i class="fas fa-table me-2"></i>Data Table
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="plotTabsContent">
+                    <!-- Comparison Plot -->
+                    <div class="tab-pane fade show active" id="comparison" role="tabpanel">
+                        <div class="plot-container">
+                            <h4 class="plot-title">Feature Importance Comparison</h4>
+                            <img id="comparisonPlot" class="plot-img" src="" alt="Comparison Plot">
+                        </div>
+                    </div>
+                    
+                    <!-- Individual Plots -->
+                    <div class="tab-pane fade" id="individual" role="tabpanel">
+                        <div class="plot-container">
+                            <h4 class="plot-title">Individual Feature Importance</h4>
+                            <img id="importancePlot" class="plot-img" src="" alt="Feature Importance">
+                        </div>
+                    </div>
+                    
+                    <!-- Data Table -->
+                    <div class="tab-pane fade" id="table" role="tabpanel">
+                        <div class="table-container">
+                            <h4 class="plot-title">Feature Importance Details</h4>
+                            <table class="feature-table" id="featureTable">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Feature</th>
+                                        <th>RLT Importance</th>
+                                        <th>RF Importance</th>
+                                        <th>Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="featureTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Prediction Section -->
+                <div class="prediction-section" id="predictionSection">
+                    <h3 class="mb-4"><i class="fas fa-magic me-2"></i>Test a Prediction</h3>
+                    <p class="text-muted mb-3">Enter feature values to get predictions from both models</p>
+                    
+                    <div id="predictionForm">
+                        <div class="row" id="featureInputs"></div>
+                        
+                        <div class="text-center mt-4">
+                            <button type="button" class="btn btn-predict" id="predictBtn">
+                                <i class="fas fa-magic me-2"></i>Make Prediction
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="predictionResults" class="prediction-result" style="display: none;">
+                        <h5 class="text-center mb-4"><i class="fas fa-poll me-2"></i>Prediction Results</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="prediction-card rlt">
+                                    <h6 style="color: var(--primary-color);"><i class="fas fa-brain me-2"></i>RLT Prediction</h6>
+                                    <div class="prediction-value" id="rltPredValue" style="color: var(--primary-color);">-</div>
+                                    <div id="rltPredProba" class="mt-2"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="prediction-card rf">
+                                    <h6 style="color: var(--secondary-color);"><i class="fas fa-tree me-2"></i>RF Prediction</h6>
+                                    <div class="prediction-value" id="rfPredValue" style="color: var(--secondary-color);">-</div>
+                                    <div id="rfPredProba" class="mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2025 Reinforcement Learning Trees Project</p>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h4>Training Models...</h4>
+            <p>Please wait while we compare RLT and Random Forest</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentFeatureStats = {};
+        let currentFeatureNames = [];
+        let currentTaskType = '';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const datasetSelect = document.getElementById('datasetSelect');
+            const configForm = document.getElementById('configForm');
+            const resultsSection = document.getElementById('resultsSection');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const datasetInfo = document.getElementById('datasetInfo');
+            
+            // Load dataset info when selection changes
+            datasetSelect.addEventListener('change', function() {
+                const dataset = this.value;
+                if (dataset) {
+                    fetch(`/dataset_info/${dataset}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                datasetInfo.style.display = 'block';
+                                document.getElementById('datasetInfoContent').innerHTML = `
+                                    <div class="mt-2">
+                                        <span class="info-badge"><i class="fas fa-tasks me-1"></i>${data.task_type}</span>
+                                        <span class="info-badge"><i class="fas fa-database me-1"></i>${data.n_samples} samples</span>
+                                        <span class="info-badge"><i class="fas fa-columns me-1"></i>${data.n_features} features</span>
+                                        <span class="info-badge"><i class="fas fa-bullseye me-1"></i>Target: ${data.target}</span>
+                                        <span class="info-badge"><i class="fas fa-info me-1"></i>Train: 150 (fixed)</span>
+                                    </div>
+                                `;
+                            }
+                        })
+                        .catch(err => console.error(err));
+                } else {
+                    datasetInfo.style.display = 'none';
+                }
+            });
+            
+            // Form submission
+            configForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                loadingOverlay.classList.add('show');
+                
+                const formData = new FormData(this);
+                
+                fetch('/run_comparison', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loadingOverlay.classList.remove('show');
+                    
+                    if (data.success) {
+                        displayResults(data);
+                    } else {
+                        alert('Error: ' + data.error);
+                        console.error(data.traceback);
+                    }
+                })
+                .catch(err => {
+                    loadingOverlay.classList.remove('show');
+                    alert('An error occurred: ' + err.message);
+                });
+            });
+            
+            // Predict button
+            document.getElementById('predictBtn').addEventListener('click', makePrediction);
+            
+            function displayResults(data) {
+                resultsSection.classList.add('show');
+                
+                // Store for prediction
+                currentFeatureStats = data.feature_stats || {};
+                currentFeatureNames = data.feature_names || [];
+                currentTaskType = data.task_type;
+                
+                // Summary
+                document.getElementById('summaryContent').innerHTML = `
+                    <div class="col-md-3">
+                        <div class="summary-item">
+                            <i class="fas fa-database"></i>
+                            <span><strong>Dataset:</strong> ${data.dataset}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-item">
+                            <i class="fas fa-tasks"></i>
+                            <span><strong>Task:</strong> ${data.task_type}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-item">
+                            <i class="fas fa-users"></i>
+                            <span><strong>Train/Test:</strong> ${data.n_train}/${data.n_test}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-item">
+                            <i class="fas fa-random"></i>
+                            <span><strong>Random State:</strong> ${data.random_state}</span>
+                        </div>
+                    </div>
+                `;
+                
+                // RLT Metrics
+                let rltMetricsHtml = '';
+                for (const [key, value] of Object.entries(data.rlt_metrics)) {
+                    rltMetricsHtml += `
+                        <div class="metric-item">
+                            <span class="metric-name">${key}</span>
+                            <span class="metric-value">${value}</span>
+                        </div>
+                    `;
+                }
+                document.getElementById('rltMetrics').innerHTML = rltMetricsHtml;
+                
+                // RF Metrics
+                let rfMetricsHtml = '';
+                for (const [key, value] of Object.entries(data.rf_metrics)) {
+                    rfMetricsHtml += `
+                        <div class="metric-item">
+                            <span class="metric-name">${key}</span>
+                            <span class="metric-value">${value}</span>
+                        </div>
+                    `;
+                }
+                document.getElementById('rfMetrics').innerHTML = rfMetricsHtml;
+                
+                // Plots
+                document.getElementById('comparisonPlot').src = 'data:image/png;base64,' + data.comparison_plot;
+                document.getElementById('importancePlot').src = 'data:image/png;base64,' + data.importance_plot;
+                
+                // Feature Table
+                let tableHtml = '';
+                data.feature_importance_data.forEach((item, index) => {
+                    const diffClass = item.difference >= 0 ? 'positive' : 'negative';
+                    const diffSign = item.difference >= 0 ? '+' : '';
+                    tableHtml += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td><strong>${item.feature}</strong></td>
+                            <td>${item.rlt_importance.toFixed(6)}</td>
+                            <td>${item.rf_importance.toFixed(6)}</td>
+                            <td class="${diffClass}">${diffSign}${item.difference.toFixed(6)}</td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('featureTableBody').innerHTML = tableHtml;
+                
+                // Build prediction form
+                buildPredictionForm(data.feature_names, data.feature_stats);
+                
+                // Scroll to results
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            function buildPredictionForm(featureNames, featureStats) {
+                const container = document.getElementById('featureInputs');
+                let html = '';
+                
+                featureNames.forEach((name, index) => {
+                    const stats = featureStats[name] || { min: 0, max: 100, mean: 50 };
+                    html += `
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">${name}</label>
+                            <input type="number" class="form-control feature-input" 
+                                   id="feat_${index}" data-feature="${name}"
+                                   value="${stats.mean.toFixed(2)}" step="0.01"
+                                   placeholder="min: ${stats.min}, max: ${stats.max}">
+                            <small class="text-muted">Range: ${stats.min.toFixed(2)} - ${stats.max.toFixed(2)}</small>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+            
+            function makePrediction() {
+                const features = {};
+                document.querySelectorAll('.feature-input').forEach(input => {
+                    const featureName = input.dataset.feature;
+                    features[featureName] = parseFloat(input.value) || 0;
+                });
+                
+                fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ features: features })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayPrediction(data);
+                    } else {
+                        alert('Prediction error: ' + data.error);
+                    }
+                })
+                .catch(err => {
+                    alert('Prediction failed: ' + err.message);
+                });
+            }
+            
+            function displayPrediction(data) {
+                document.getElementById('predictionResults').style.display = 'block';
+                
+                if (data.task_type === 'classification') {
+                    document.getElementById('rltPredValue').textContent = data.rlt_prediction.class;
+                    document.getElementById('rfPredValue').textContent = data.rf_prediction.class;
+                    
+                    // Show probabilities
+                    if (data.rlt_prediction.probabilities) {
+                        let probaHtml = '<small><strong>Probabilities:</strong><br>';
+                        for (const [cls, prob] of Object.entries(data.rlt_prediction.probabilities)) {
+                            probaHtml += `${cls}: ${(prob * 100).toFixed(1)}%<br>`;
+                        }
+                        probaHtml += '</small>';
+                        document.getElementById('rltPredProba').innerHTML = probaHtml;
+                    }
+                    
+                    if (data.rf_prediction.probabilities) {
+                        let probaHtml = '<small><strong>Probabilities:</strong><br>';
+                        for (const [cls, prob] of Object.entries(data.rf_prediction.probabilities)) {
+                            probaHtml += `${cls}: ${(prob * 100).toFixed(1)}%<br>`;
+                        }
+                        probaHtml += '</small>';
+                        document.getElementById('rfPredProba').innerHTML = probaHtml;
+                    }
+                } else {
+                    document.getElementById('rltPredValue').textContent = data.rlt_prediction.value;
+                    document.getElementById('rfPredValue').textContent = data.rf_prediction.value;
+                    document.getElementById('rltPredProba').innerHTML = '';
+                    document.getElementById('rfPredProba').innerHTML = '';
+                }
+                
+                // Scroll to prediction results
+                document.getElementById('predictionResults').scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    </script>
+</body>
+</html>
