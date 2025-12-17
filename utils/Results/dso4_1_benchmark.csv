@@ -1,0 +1,21 @@
+Dataset,Model,Task,Train Time (s),Pred Time (s),Metric Name,Metric Value
+breast_cancer,RLT (ExtraTrees),classification,0.6048,0.1112,Error Rate,5.73%
+breast_cancer,RLT (LightGBM),classification,7.1249,0.1111,Error Rate,4.77%
+concrete,RLT (ExtraTrees),regression,0.9369,0.1208,MSE,165.22
+concrete,RLT (LightGBM),regression,9.653,0.1208,MSE,165.54
+parkinsons,RLT (ExtraTrees),classification,0.7252,0.0108,Error Rate,26.67%
+parkinsons,RLT (LightGBM),classification,7.855,0.011,Error Rate,22.22%
+sonar,RLT (ExtraTrees),classification,0.7853,0.0108,Error Rate,24.14%
+sonar,RLT (LightGBM),classification,8.5904,0.0108,Error Rate,24.14%
+wine_red,RLT (ExtraTrees),classification,0.8865,0.1213,Error Rate,47.31%
+wine_red,RLT (LightGBM),classification,11.3487,0.1312,Error Rate,55.91%
+wine_white,RLT (ExtraTrees),classification,0.9264,0.1519,Error Rate,58.04%
+wine_white,RLT (LightGBM),classification,12.4031,0.152,Error Rate,61.45%
+auto_mpg,RLT (ExtraTrees),regression,0.9467,0.0208,MSE,12.98
+auto_mpg,RLT (LightGBM),regression,9.4822,0.0105,MSE,8.74
+housing,RLT (ExtraTrees),regression,0.9462,0.1106,MSE,8361375323.23
+housing,RLT (LightGBM),regression,9.9993,0.1207,MSE,8302391914.28
+eighthr,RLT (ExtraTrees),classification,0.6456,0.1518,Error Rate,4.79%
+eighthr,RLT (LightGBM),classification,6.5522,0.1418,Error Rate,4.77%
+parkinsons_updrs,RLT (ExtraTrees),regression,0.9371,0.161,MSE,19.70
+parkinsons_updrs,RLT (LightGBM),regression,9.5365,0.1611,MSE,16.44

@@ -1,0 +1,41 @@
+Dataset,Model,Task,Train Time (s),Pred Time (s),Metric Name,Metric Value
+breast_cancer,RLT,classification,9.5021,0.1433,Error Rate,5.25%
+breast_cancer,Random Forest,classification,0.0546,0.0132,Error Rate,8.11%
+breast_cancer,XGBoost,classification,0.0516,0.0005,Error Rate,5.01%
+breast_cancer,Gradient Boosting,classification,1.1413,0.0006,Error Rate,7.16%
+concrete,RLT,regression,14.2116,0.1728,MSE,144.25
+concrete,Random Forest,regression,0.0637,0.0134,MSE,177.63
+concrete,XGBoost,regression,0.2283,0.0006,MSE,179.54
+concrete,Gradient Boosting,regression,1.1467,0.0013,MSE,155.54
+parkinsons,RLT,classification,9.8665,0.043,Error Rate,13.33%
+parkinsons,Random Forest,classification,0.051,0.0131,Error Rate,24.44%
+parkinsons,XGBoost,classification,0.0578,0.0005,Error Rate,15.56%
+parkinsons,Gradient Boosting,classification,1.1529,0.0003,Error Rate,15.56%
+sonar,RLT,classification,11.1764,0.0433,Error Rate,20.69%
+sonar,Random Forest,classification,0.0483,0.0132,Error Rate,22.41%
+sonar,XGBoost,classification,0.074,0.0005,Error Rate,24.14%
+sonar,Gradient Boosting,classification,1.1433,0.0003,Error Rate,18.97%
+wine_red,RLT,classification,13.074,0.1857,Error Rate,46.73%
+wine_red,Random Forest,classification,0.0567,0.0133,Error Rate,51.70%
+wine_red,XGBoost,classification,0.3513,0.0008,Error Rate,48.88%
+wine_red,Gradient Boosting,classification,6.8996,0.006,Error Rate,54.92%
+wine_white,RLT,classification,13.2753,0.3196,Error Rate,56.94%
+wine_white,Random Forest,classification,0.0541,0.0136,Error Rate,54.26%
+wine_white,XGBoost,classification,0.3237,0.0012,Error Rate,59.33%
+wine_white,Gradient Boosting,classification,6.9222,0.0172,Error Rate,58.30%
+auto_mpg,RLT,regression,13.9771,0.0832,MSE,8.27
+auto_mpg,Random Forest,regression,0.0702,0.0134,MSE,15.76
+auto_mpg,XGBoost,regression,0.2003,0.0005,MSE,15.63
+auto_mpg,Gradient Boosting,regression,1.1303,0.0005,MSE,12.53
+housing,RLT,regression,14.1394,0.1637,MSE,7877751426.90
+housing,Random Forest,regression,0.0725,0.0134,MSE,10155740721.06
+housing,XGBoost,regression,0.3955,0.0006,MSE,14081930303.16
+housing,Gradient Boosting,regression,1.1435,0.0006,MSE,8575492637.82
+eighthr,RLT,classification,7.3367,0.2452,Error Rate,4.77%
+eighthr,Random Forest,classification,0.0551,0.0136,Error Rate,4.77%
+eighthr,XGBoost,classification,0.0335,0.0008,Error Rate,4.79%
+eighthr,Gradient Boosting,classification,1.1505,0.0033,Error Rate,4.86%
+parkinsons_updrs,RLT,regression,13.7275,0.409,MSE,16.50
+parkinsons_updrs,Random Forest,regression,0.0731,0.014,MSE,17.66
+parkinsons_updrs,XGBoost,regression,0.1749,0.0011,MSE,20.34
+parkinsons_updrs,Gradient Boosting,regression,1.1386,0.0076,MSE,17.77

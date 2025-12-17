@@ -1,0 +1,21 @@
+Dataset,Model,Task,Train Time (s),Pred Time (s),Metric Name,Metric Value
+breast_cancer,RLT (No Bandit),classification,2.9094,0.1212,Error Rate,5.73%
+breast_cancer,RLT (Bandit),classification,2.5068,0.1213,Error Rate,6.68%
+concrete,RLT (No Bandit),regression,5.5659,0.1208,MSE,183.04
+concrete,RLT (Bandit),regression,4.9216,0.131,MSE,175.72
+parkinsons,RLT (No Bandit),classification,3.5626,0.0111,Error Rate,13.33%
+parkinsons,RLT (Bandit),classification,3.1199,0.0111,Error Rate,22.22%
+sonar,RLT (No Bandit),classification,4.0246,0.0114,Error Rate,25.86%
+sonar,RLT (Bandit),classification,3.5125,0.0111,Error Rate,22.41%
+wine_red,RLT (No Bandit),classification,4.8413,0.1321,Error Rate,49.05%
+wine_red,RLT (Bandit),classification,4.1662,0.1316,Error Rate,51.28%
+wine_white,RLT (No Bandit),classification,4.9633,0.1624,Error Rate,58.57%
+wine_white,RLT (Bandit),classification,4.4579,0.1627,Error Rate,61.48%
+auto_mpg,RLT (No Bandit),regression,5.7149,0.0208,MSE,14.88
+auto_mpg,RLT (Bandit),regression,5.0706,0.0207,MSE,14.85
+housing,RLT (No Bandit),regression,5.8361,0.1209,MSE,9406728897.08
+housing,RLT (Bandit),regression,5.0035,0.1211,MSE,13717054927.71
+eighthr,RLT (No Bandit),classification,2.2565,0.1422,Error Rate,4.77%
+eighthr,RLT (Bandit),classification,2.1854,0.1419,Error Rate,4.77%
+parkinsons_updrs,RLT (No Bandit),regression,5.7674,0.1919,MSE,17.59
+parkinsons_updrs,RLT (Bandit),regression,5.0715,0.1918,MSE,31.11
