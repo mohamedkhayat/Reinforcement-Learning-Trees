@@ -205,7 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-/datasets
 main.py
 Notes.md
 /models/
