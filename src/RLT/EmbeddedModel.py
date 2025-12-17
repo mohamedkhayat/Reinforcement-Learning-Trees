@@ -161,15 +161,19 @@ class EmbeddedModel:
             X_train, y_train = X_subset[train_idx, :], y[train_idx]
             X_oob, y_oob = X_subset[test_idx, :], y[test_idx]
 
+            model_type_str = getattr(
+                self, "model_type", getattr(self, "model", "extra_trees")
+            ).lower()
+
             if self.task_type.lower() == "classification":
                 unique_train = np.unique(y_train)
-
                 if len(unique_train) < 2:
                     return None
 
-                unique_oob = np.unique(y_oob)
-                if not np.isin(unique_oob, unique_train).all():
-                    return None
+                if model_type_str == "lightgbm":
+                    unique_oob = np.unique(y_oob)
+                    if not np.isin(unique_oob, unique_train).all():
+                        return None
 
             ex_params = {
                 "min_samples_split": self.min_samples_split,
@@ -189,12 +193,8 @@ class EmbeddedModel:
                 "force_col_wise": True,
             }
 
-            model_type_str = getattr(
-                self, "model_type", getattr(self, "model", "extratrees")
-            ).lower()
-
             if self.task_type.lower() == "classification":
-                if model_type_str == "extratrees":
+                if model_type_str == "extra_trees":
                     model = ExtraTreeClassifier(**ex_params)
                 elif model_type_str == "lightgbm":
                     with warnings.catch_warnings():
@@ -204,7 +204,7 @@ class EmbeddedModel:
                     return None
 
             elif self.task_type.lower() == "regression":
-                if model_type_str == "extratrees":
+                if model_type_str == "extra_trees":
                     model = ExtraTreeRegressor(**ex_params)
                 elif model_type_str == "lightgbm":
                     with warnings.catch_warnings():
@@ -228,7 +228,7 @@ class EmbeddedModel:
                 )
 
                 model.fit(
-                    X_train.values,
+                    X_train,
                     y_train,
                     eval_set=[(X_oob, y_oob)],
                     eval_metric=metric,

@@ -50,6 +50,9 @@ class ReinforcementLearningTree(ABC):
         min_samples_split: int = 2,
         random_state: int = 42,
         n_jobs: int = 1,
+        use_bandit: bool = False,
+        bandit_exploration: float = 1.0,
+        bandit_selection_rate: float = 0.5,
     ) -> None:
         self.max_depth = max_depth
         self.embedded_model = embedded_model
@@ -65,6 +68,17 @@ class ReinforcementLearningTree(ABC):
         self.n_thresholds_to_try = n_thresholds_to_try
         self.n_jobs = n_jobs
         self.rng = np.random.default_rng(random_state)
+
+        self.use_bandit = use_bandit
+        self.bandit_exploration = bandit_exploration
+        self.bandit_selection_rate = bandit_selection_rate
+
+        self.feature_counts = {}
+        self.feature_sums = {}
+        self.total_steps = 0
+
+        self.vi_split_count = 0
+        self.fallback_split_count = 0
 
     def _get_score(
         self,
@@ -105,6 +119,57 @@ class ReinforcementLearningTree(ABC):
         )
         return score_total
 
+    def _bandit_select_features(self, valid_features: List[int]) -> List[int]:
+        """
+        Use UCB1 algorithm to select a subset of features to evaluate.
+        Formula: UCB = Avg_Reward + c * sqrt(ln(Total_Steps) / N_visits)
+        """
+        if not self.use_bandit or self.total_steps < 1:
+            return valid_features
+
+        ucb_scores = {}
+        # c * sqrt(ln(t))
+        exploration_factor = self.bandit_exploration * np.sqrt(np.log(self.total_steps))
+
+        for feat in valid_features:
+            n = self.feature_counts.get(feat, 0)
+            if n == 0:
+                # Infinite score for unvisited arms to ensure they get tried
+                ucb_scores[feat] = float("inf")
+            else:
+                avg_reward = self.feature_sums.get(feat, 0.0) / n
+                exploration = exploration_factor / np.sqrt(n)
+                ucb_scores[feat] = avg_reward + exploration
+
+        # Determine how many features to select
+        n_features = len(valid_features)
+        n_select = int(n_features * self.bandit_selection_rate)
+
+        # Ensure we always select at least 'min_protected' or 'k' features if possible
+        # to prevent starving the model of choices
+        min_limit = max(self.min_protected, self.k, 2)
+        n_select = max(n_select, min_limit)
+        n_select = min(n_select, n_features)
+
+        # Select top N features by UCB score
+        # Note: In ties (often inf), Python's sort is stable
+        sorted_features = sorted(ucb_scores, key=ucb_scores.get, reverse=True)
+        return sorted_features[:n_select]
+
+    def _update_bandit_stats(self, vi_scores: Dict[int, float]):
+        """
+        Logic specific to Bandits:
+        - Treat VI as a 'Reward'.
+        - Clip negative rewards to 0 (Bandits hate negative rewards).
+        - Increment step count for UCB calculation.
+        """
+        self.total_steps += 1
+        for feat, score in vi_scores.items():
+            weighted_score = max(0.0, score)
+
+            self.feature_sums[feat] = self.feature_sums.get(feat, 0.0) + weighted_score
+            self.feature_counts[feat] = self.feature_counts.get(feat, 0) + 1
+
     def _find_best_split(
         self, X: np.ndarray, y: np.ndarray, valid_features: List[int]
     ) -> Tuple[List[int], Dict[int, float]]:
@@ -125,6 +190,11 @@ class ReinforcementLearningTree(ABC):
         Tuple[List, dict]
             A tuple containing the list of variables sorted by importance and the dictionary of VI scores.
         """
+        if self.use_bandit:
+            features_to_evaluate = self._bandit_select_features(valid_features)
+        else:
+            features_to_evaluate = valid_features
+
         embedded_seed = int(self.rng.integers(0, 10**9))
 
         embedded_model = EmbeddedModel(
@@ -132,12 +202,12 @@ class ReinforcementLearningTree(ABC):
             self.embedded_model,
             self.n_estimators,
             self.max_depth,
-            self.min_samples_split,
+            2,  # self.min_samples_split,
             self.n_jobs,
             embedded_seed,
         )
 
-        VI_scores = embedded_model.get_variables_importances(X, y, valid_features)
+        VI_scores = embedded_model.get_variables_importances(X, y, features_to_evaluate)
 
         variables_sorted_by_importance = sorted(
             VI_scores, key=VI_scores.get, reverse=True
@@ -379,34 +449,38 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
+        if depth == 0:
+            self.vi_split_count = 0
+            self.vi_fallback_split_count = 0
+
         n_node = len(y)
+
         all_features = set(range(X.shape[1]))
         valid_features = list(all_features - muted_set)
 
-        # Check if we should use Reinforcement Learning or Fallback
         if n_node >= self.min_samples_split and len(valid_features) > 1:
-            # 1. Run Embedded Model (RLT)
+            self.vi_split_count += 1
             variables_sorted_by_importance, VI_scores = self._find_best_split(
                 X, y, valid_features
             )
 
-            # 2. Try Linear Combination
             coefficients, best_features = self._get_coefficients(
                 X, y, VI_scores, variables_sorted_by_importance
             )
 
-            # 3. Find Threshold
             if best_features is not None and len(best_features) > 0:
                 best_threshold = self._find_best_threshold(
                     X, y, best_features, coefficients
                 )
             else:
                 # Fallback if VI <= 0
+                self.fallback_split_count += 1
                 best_features, best_threshold, coefficients = self._find_standard_split(
                     X, y, valid_features
                 )
 
         else:
+            self.fallback_split_count += 1
             # Fallback: Node too small for Embedded Model
             best_features, best_threshold, coefficients = self._find_standard_split(
                 X, y, valid_features
@@ -421,6 +495,11 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
+        if self.use_bandit and "VI_scores" in locals():
+            selected_vi_scores = {f: VI_scores.get(f, 0.0) for f in best_features}
+
+            self._update_bandit_stats(selected_vi_scores)
+
         if depth == 0:
             if "variables_sorted_by_importance" in locals():
                 protected_set.update(
@@ -433,7 +512,7 @@ class ReinforcementLearningTree(ABC):
             num_valid = len(valid_features)
             num_to_mute = int(self.muting_rate * num_valid)
 
-            muting_candidates = [f for f in valid_features if f not in protected_set]
+            muting_candidates = [f for f in VI_scores.keys() if f not in protected_set]
 
             muting_candidates.sort(key=lambda f: VI_scores.get(f, 0.0))
 
@@ -459,8 +538,8 @@ class ReinforcementLearningTree(ABC):
             )
             return Node(valeur=valeur, probabilities=probabilities)
 
-        x_left, y_left = X[indice_left,:], y[indice_left]
-        x_right, y_right = X[indice_right,:], y[indice_right]
+        x_left, y_left = X[indice_left, :], y[indice_left]
+        x_right, y_right = X[indice_right, :], y[indice_right]
 
         left_node = self._build_tree(
             x_left, y_left, protected_set.copy(), next_muted_set.copy(), depth + 1
@@ -486,7 +565,11 @@ class ReinforcementLearningTree(ABC):
         pass
 
     def fit(
-        self, X: Union[pd.DataFrame, np.ndarray], y: Union[pd.Series, np.ndarray]
+        self,
+        X: Union[pd.DataFrame, np.ndarray],
+        y: Union[pd.Series, np.ndarray],
+        X_oob: Union[pd.DataFrame, np.ndarray],
+        y_oob: Union[pd.Series, np.ndarray],
     ) -> Node:
         """
         Build the tree from the training set (X, y).
@@ -508,18 +591,53 @@ class ReinforcementLearningTree(ABC):
         if isinstance(y, pd.Series):
             y = y.values
 
-        all_features = set(range(X.shape[1]))
-        valid_features = list(all_features)
+        self.feature_sums = {}
+        self.feature_counts = {}
+        self.total_steps = 0
 
-        _, VI_scores = self._find_best_split(X, y, valid_features)
-
-        self.variable_importances_ = np.zeros(X.shape[1])
-
-        for idx in range(X.shape[1]):
-            self.variable_importances_[idx] = VI_scores.get(idx, 0.0)
+        self.vi_split_count = 0
+        self.fallback_split_count = 0
 
         self.root = self._build_tree(X, y, set(), set(), depth=0)
+
+        self.variable_importances_ = self._calculate_permutation_importance(
+            X_oob, y_oob
+        )
         return self.root
+
+    def _calculate_permutation_importance(self, X, y):
+        """
+        Calculates importance: Ratio = Permuted_Error / Base_Error
+        """
+        n_samples, n_features = X.shape
+        importances = np.zeros(n_features)
+
+        y_pred = self.predict(X)
+        base_error = self._get_loss_for_importance(y, y_pred)
+
+        if base_error < 1e-15:
+            return np.zeros(n_features)
+
+        rng = np.random.default_rng(self.random_state)
+
+        for f in range(n_features):
+            original_col = X[:, f].copy()
+            rng.shuffle(X[:, f])
+
+            y_pred_perm = self.predict(X)
+            perm_error = self._get_loss_for_importance(y, y_pred_perm)
+
+            importances[f] = perm_error / base_error
+
+            X[:, f] = original_col
+
+        return importances
+
+    def _get_loss_for_importance(self, y_true, y_pred):
+        if self.task_type.lower() == "regression":
+            return np.mean((y_true - y_pred) ** 2)
+        else:
+            return np.mean(y_true != y_pred)
 
     def predict(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
@@ -621,4 +739,4 @@ class ReinforcementLearningTree(ABC):
                 if cls in class_to_idx:
                     proba[i, class_to_idx[cls]] = prob
 
-        return proba
+        return proba    

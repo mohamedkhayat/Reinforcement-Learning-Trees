@@ -56,6 +56,9 @@ class ReinforcementLearningTrees:
         min_samples_split: int = 5,
         n_jobs: int = 1,
         random_state: int = 42,
+        use_bandit: bool = False,
+        bandit_exploration: float = 1.0,
+        bandit_selection_rate: float = 0.5,
     ):
         self.task_type = task_type
         self.embedded_model = embedded_model
@@ -71,6 +74,9 @@ class ReinforcementLearningTrees:
         self.random_state = random_state
         self.n_jobs = n_jobs
         self.trees = []
+        self.use_bandit = use_bandit
+        self.bandit_exploration = bandit_exploration
+        self.bandit_selection_rate = bandit_selection_rate
 
     @property
     def feature_importances_(self):
@@ -80,14 +86,30 @@ class ReinforcementLearningTrees:
         for tree in self.trees:
             if hasattr(tree, "variable_importances_"):
                 all_importances.append(tree.variable_importances_)
+
         if not all_importances:
             raise AttributeError("No variable_importances_ found in trees.")
-        return np.mean(all_importances, axis=0)
+
+        importances_matrix = np.array(all_importances)
+
+        avg_ratios = np.mean(importances_matrix, axis=0)
+
+        final_importance = avg_ratios - 1.0
+
+        final_importance = np.maximum(final_importance, 0.0)
+
+        total = np.sum(final_importance)
+        if total > 0:
+            final_importance /= total
+
+        return final_importance
 
     def _fit_single_tree(
         self,
         X_boot: np.ndarray,
         y_boot: np.ndarray,
+        X_oob: np.ndarray,
+        y_oob: np.ndarray,
         params: Dict[str, Union[str, int]],
         seed: int,
         embedded_n_jobs: int,
@@ -122,7 +144,7 @@ class ReinforcementLearningTrees:
                 "classification", random_state=seed, n_jobs=embedded_n_jobs, **params
             )
 
-        model.fit(X_boot, y_boot)
+        model.fit(X_boot, y_boot, X_oob, y_oob)
         return model
 
     def _build_forest(self, X: np.ndarray, y: np.ndarray) -> None:
@@ -168,17 +190,28 @@ class ReinforcementLearningTrees:
             "n_thresholds_to_try": self.n_thresholds_to_try,
             "max_depth": self.max_depth,
             "min_samples_split": self.min_samples_split,
+            "use_bandit": self.use_bandit,
+            "bandit_exploration": self.bandit_exploration,
+            "bandit_selection_rate": self.bandit_selection_rate,
         }
 
         bootstraps = []
+        oobs = []
         for _ in range(self.n_rlt_trees):
             indices = rng.choice(n_samples, n_samples, replace=True)
-            bootstraps.append((X[indices], y[indices]))
+            mask = np.ones(n_samples, dtype=bool)
+            mask[indices] = False
+            X_boot, y_boot = X[indices], y[indices]
+            X_oob, y_oob = X[mask], y[mask]
+            bootstraps.append((X_boot, y_boot))
+            oobs.append((X_oob, y_oob))
 
         self.trees = Parallel(n_jobs=outer_n_jobs)(
             delayed(self._fit_single_tree)(
                 bootstraps[i][0],
                 bootstraps[i][1],
+                oobs[i][0],
+                oobs[i][1],
                 tree_params,
                 seeds[i],
                 inner_n_jobs,
@@ -205,6 +238,20 @@ class ReinforcementLearningTrees:
             Returns self.
         """
         self._build_forest(X, y)
+        vi_counts = [t.vi_split_count for t in self.trees]
+        fallback_counts = [t.fallback_split_count for t in self.trees]
+
+        self.average_vi_split_count = np.mean(vi_counts)
+        self.average_fallback_split_count = np.mean(fallback_counts)
+
+        self.total_vi_splits = np.sum(vi_counts)
+        self.total_fallback_splits = np.sum(fallback_counts)
+        self.vi_usage_ratio = (
+            self.total_vi_splits / (self.total_vi_splits + self.total_fallback_splits)
+            if (self.total_vi_splits + self.total_fallback_splits) > 0
+            else 0.0
+        )
+
         return self
 
     def _aggregate_results(self, X: np.ndarray) -> np.ndarray:
@@ -281,3 +328,26 @@ class ReinforcementLearningTrees:
             The predicted values.
         """
         return self._aggregate_results(X)
+
+    def print_split_statistics(self):
+        """Print detailed statistics about VI vs fallback split usage."""
+        print("=" * 70)
+        print("🌳 RLT FOREST SPLIT STATISTICS")
+        print("=" * 70)
+        print(f"Number of trees:              {self.n_rlt_trees}")
+        print(f"Average VI splits per tree:   {self.average_vi_split_count:.2f}")
+        print(f"Average fallback splits:      {self.average_fallback_split_count:.2f}")
+        print(f"Total VI splits (all trees):  {self.total_vi_splits}")
+        print(f"Total fallback splits:        {self.total_fallback_splits}")
+        print(f"VI usage ratio:               {self.vi_usage_ratio:.2%}")
+        print("=" * 70)
+
+        if self.vi_usage_ratio < 0.3:
+            print("⚠️  WARNING: Less than 30% of splits use VI!")
+            print("   → Consider lowering min_samples_split")
+        elif self.vi_usage_ratio > 0.9:
+            print("✅ EXCELLENT: >90% of splits use VI-based selection!")
+        else:
+            print("✔️  GOOD: Healthy mix of VI and fallback splits")
+
+        print("=" * 70)
