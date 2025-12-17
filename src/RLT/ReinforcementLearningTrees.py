@@ -1,4 +1,4 @@
-from typing import Dict, Self, Union
+from typing import Any, Dict, Self, Union
 from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
@@ -110,7 +110,7 @@ class ReinforcementLearningTrees:
         y_boot: np.ndarray,
         X_oob: np.ndarray,
         y_oob: np.ndarray,
-        params: Dict[str, Union[str, int]],
+        params: Dict[str, Any],
         seed: int,
         embedded_n_jobs: int,
     ) -> ReinforcementLearningTree:
@@ -147,7 +147,7 @@ class ReinforcementLearningTrees:
         model.fit(X_boot, y_boot, X_oob, y_oob)
         return model
 
-    def _build_forest(self, X: np.ndarray, y: np.ndarray) -> None:
+    def _build_forest(self, X: Union[pd.DataFrame, np.ndarray], y: Union[pd.Series, np.ndarray]) -> None:
         """
         Orchestrate the parallel building of the forest.
 
@@ -168,8 +168,10 @@ class ReinforcementLearningTrees:
         else:
             self.classes_ = None
         if self.embedded_model not in ("extra_trees", "lightgbm"):
-            raise ValueError(f"{self.embedded_model} not a valid model. Use extra_trees or lightgbm")
-        
+            raise ValueError(
+                f"{self.embedded_model} not a valid model. Use extra_trees or lightgbm"
+            )
+
         n_samples = len(y)
         rng = np.random.default_rng(self.random_state)
 
@@ -240,7 +242,7 @@ class ReinforcementLearningTrees:
             Returns self.
         """
         self._build_forest(X, y)
-        
+
         vi_counts = [t.vi_split_count for t in self.trees]
         fallback_counts = [t.fallback_split_count for t in self.trees]
 

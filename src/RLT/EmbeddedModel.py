@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import warnings
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
 import numpy as np
@@ -116,12 +116,12 @@ class EmbeddedModel:
             vi = avg_ratio - 1
 
             vi_scores[feat_idx] = vi
-            
+
         return vi_scores
 
     def _fit_single_tree(
-        self, X: np.ndarray, y: np.ndarray, valid_features: List, seed: int
-    ) -> Tuple[float, np.ndarray]:
+        self, X: np.ndarray, y: np.ndarray, valid_features: List[int], seed: int
+    ) -> Optional[Tuple[float, np.ndarray]]:
         """
         Fit a single ExtraTree to estimate variable importance.
 
@@ -140,18 +140,20 @@ class EmbeddedModel:
 
         Returns
         -------
-        Tuple[float, np.ndarray] or None
-            A tuple containing the MSE contribution and PMSE contributions, or None if split failed.
+        Optional[Tuple[float, np.ndarray]]
+            A tuple containing the base error and PMSE contributions, or None if the split cannot be evaluated.
         """
 
         try:
             rng = np.random.default_rng(seed)
             n_samples = X.shape[0]
-            indices = np.arange(n_samples) # [0, 1, 2, 3, 4, ..., n_samples - 1]
-                                                                     # X : 10 lignes
-            train_idx = rng.choice(indices, n_samples, replace=True) # train_idx :               [0,0,0, 1, 2 ,2 ,2 ,3 ,4 ,5 ,5]
-                                                                     # mask      :               [0,0,0, 0, 0 ,0 ,1 ,1 ,1 ,1 ,1]
-                                                                     # mask[train_idx] = False : [1,1,1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1]
+            indices = np.arange(n_samples)  # [0, 1, 2, 3, 4, ..., n_samples - 1]
+            # X : 10 lignes
+            train_idx = rng.choice(
+                indices, n_samples, replace=True
+            )  # train_idx :               [0,0,0, 1, 2 ,2 ,2 ,3 ,4 ,5 ,5]
+            # mask      :               [0,0,0, 0, 0 ,0 ,1 ,1 ,1 ,1 ,1]
+            # mask[train_idx] = False : [1,1,1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1]
             mask = np.ones((n_samples), dtype=bool)
             mask[train_idx] = False
             test_idx = indices[mask]

@@ -17,7 +17,7 @@ class RLTRegression(ReinforcementLearningTree):
         muting_rate: float,
         min_protected: int,
         k: int,
-        alpha: int,
+        alpha: float,
         n_thresholds_to_try: int,
         max_depth: int,
         min_samples_split: int = 2,

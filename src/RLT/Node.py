@@ -1,36 +1,37 @@
+from typing import Any, Dict, List, Optional
+
+
 class Node:
-    """
-    A node in the Reinforcement Learning Tree structure.
+    """A node in the Reinforcement Learning Tree.
 
     Parameters
     ----------
-    features : list of int, optional
+    features : Optional[List[int]]
         Indices of features used for the split at this node.
-    threshold : float, optional
+    threshold : Optional[float]
         Threshold value for the split.
-    coefficients : list of float, optional
+    coefficients : Optional[List[float]]
         Coefficients for the linear combination of features.
-    left : Node, optional
+    left : Optional["Node"]
         Left child node.
-    right : Node, optional
+    right : Optional["Node"]
         Right child node.
-    valeur : Any, optional
+    valeur : Optional[Any]
         Prediction value if this is a terminal node.
-    probabilities : dict, optional
+    probabilities : Optional[Dict[Any, float]]
         Class probabilities at this node (for classification tasks).
-        Maps class labels to their probabilities.
     """
 
     def __init__(
         self,
-        features=None,
-        threshold=None,
-        coefficients=None,
-        left=None,
-        right=None,
+        features: Optional[List[int]] = None,
+        threshold: Optional[float] = None,
+        coefficients: Optional[List[float]] = None,
+        left: Optional["Node"] = None,
+        right: Optional["Node"] = None,
         *,
-        valeur=None,
-        probabilities=None,
+        valeur: Optional[Any] = None,
+        probabilities: Optional[Dict[Any, float]] = None,
     ):
         self.right = right
         self.left = left
