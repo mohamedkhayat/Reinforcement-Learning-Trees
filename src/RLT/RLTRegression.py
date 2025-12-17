@@ -23,6 +23,9 @@ class RLTRegression(ReinforcementLearningTree):
         min_samples_split: int = 2,
         random_state: int = 42,
         n_jobs: int = 1,
+        use_bandit: bool = False,
+        bandit_exploration: float = 1.0,
+        bandit_selection_rate: float = 0.5,
     ):
         super().__init__(
             task_type,
@@ -37,6 +40,9 @@ class RLTRegression(ReinforcementLearningTree):
             min_samples_split,
             random_state,
             n_jobs,
+            use_bandit,
+            bandit_exploration,
+            bandit_selection_rate,
         )
 
     def _get_loss(self, y: np.ndarray) -> float:
