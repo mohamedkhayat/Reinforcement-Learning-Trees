@@ -42,6 +42,12 @@ datasets_dict = {
         "target": "Class",
         "type": "Categorical",
     },
+    "parkinsons_updrs": {
+        "path": "parkinsons_updrs.csv",
+        "target": "total_UPDRS",
+        "id_col": "subject#",
+        "type": "Continuous",
+    },
 }
 
 

@@ -167,7 +167,9 @@ class ReinforcementLearningTrees:
             self.classes_ = np.unique(y)
         else:
             self.classes_ = None
-
+        if self.embedded_model not in ("extra_trees", "lightgbm"):
+            raise ValueError(f"{self.embedded_model} not a valid model. Use extra_trees or lightgbm")
+        
         n_samples = len(y)
         rng = np.random.default_rng(self.random_state)
 
@@ -238,6 +240,7 @@ class ReinforcementLearningTrees:
             Returns self.
         """
         self._build_forest(X, y)
+        
         vi_counts = [t.vi_split_count for t in self.trees]
         fallback_counts = [t.fallback_split_count for t in self.trees]
 
