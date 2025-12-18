@@ -129,27 +129,6 @@ python -c "from rlt import ReinforcementLearningTree; print('RLT ready')"
 
 ---
 
-## 📦 Project Structure
-
-```text
-.
-├── rlt/
-│   ├── tree.py              # ReinforcementLearningTree implementation
-│   ├── embedded_models.py   # Embedded models (ExtraTrees, LightGBM)
-│   ├── muting.py             # Variable muting logic
-│   └── utils.py
-├── experiments/
-│   ├── synthetic/
-│   ├── uci/
-│   └── benchmarks/
-├── notebooks/
-├── pyproject.toml
-├── README.md
-└── results/
-```
-
----
-
 ## 🚀 Usage Example
 
 ```python
