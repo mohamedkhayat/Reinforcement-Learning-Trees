@@ -45,3 +45,147 @@ This project is structured around four key objectives:
 ### 4️⃣ DSO 4: Innovation
 **Goal:** Propose and test architectural improvements to the original RLT.
 *   **Experiment:** Replacing the standard embedded model with **LightGBM** to improve training speed without sacrificing accuracy.
+
+---
+
+## 🛠️ Installation & Environment Setup
+
+### Requirements
+
+* Python **3.9+**
+* pip
+* Virtual environment support
+
+---
+
+### 1️⃣ Create a virtual environment
+
+From the project root:
+
+```bash
+python -m venv .venv
+```
+
+---
+
+### 2️⃣ Activate the environment
+
+**Linux / macOS**
+
+```bash
+source .venv/bin/activate
+```
+
+**Windows (PowerShell)**
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+You should now see `(.venv)` in your terminal.
+
+---
+
+### 3️⃣ Upgrade pip (recommended)
+
+```bash
+pip install --upgrade pip
+```
+
+---
+
+### 4️⃣ Install the project and dependencies
+
+Install directly from `pyproject.toml`:
+
+```bash
+pip install .
+```
+
+This installs:
+
+* all required dependencies
+* the `rlt` package itself
+
+---
+
+### 🔧 Development Installation (optional)
+
+If you plan to modify the source code or run experiments:
+
+```bash
+pip install -e .
+```
+
+Editable installs ensure code changes are reflected immediately.
+
+---
+
+### 🧪 Verify installation
+
+```bash
+python -c "from rlt import ReinforcementLearningTree; print('RLT ready')"
+```
+
+---
+
+## 📦 Project Structure
+
+```text
+.
+├── rlt/
+│   ├── tree.py              # ReinforcementLearningTree implementation
+│   ├── embedded_models.py   # Embedded models (ExtraTrees, LightGBM)
+│   ├── muting.py             # Variable muting logic
+│   └── utils.py
+├── experiments/
+│   ├── synthetic/
+│   ├── uci/
+│   └── benchmarks/
+├── notebooks/
+├── pyproject.toml
+├── README.md
+└── results/
+```
+
+---
+
+## 🚀 Usage Example
+
+```python
+from rlt import ReinforcementLearningTree
+
+model = ReinforcementLearningTree(
+    n_estimators=100,
+    max_depth=6,
+    embedded_model="extratrees",
+    exploration_rate=0.1
+)
+
+model.fit(X_train, y_train)
+preds = model.predict(X_test)
+```
+
+---
+
+## 📚 Citation
+
+If you use this implementation in academic work:
+
+```bibtex
+@article{zhu2015reinforcement,
+  title={Reinforcement Learning Trees},
+  author={Zhu, Ruoqing and Zeng, Donglin and Kosorok, Michael R.},
+  journal={Journal of the American Statistical Association},
+  year={2015}
+}
+```
+
+---
+
+## ⚠️ Disclaimer
+
+This is an **independent re-implementation** for research and educational purposes.
+It is not an official reproduction by the original authors.
+
+---
