@@ -250,29 +250,29 @@ def run_comparison():
         # Calculate metrics
         if task_type == 'classification':
             rlt_metrics = {
-                'Accuracy': round(accuracy_score(y_test, rlt_pred), 4),
-                'Precision': round(precision_score(y_test, rlt_pred, average='weighted', zero_division=0), 4),
-                'Recall': round(recall_score(y_test, rlt_pred, average='weighted', zero_division=0), 4),
-                'F1-Score': round(f1_score(y_test, rlt_pred, average='weighted', zero_division=0), 4)
+                'Accuracy': float(round(accuracy_score(y_test, rlt_pred), 4)),
+                'Precision': float(round(precision_score(y_test, rlt_pred, average='weighted', zero_division=0), 4)),
+                'Recall': float(round(recall_score(y_test, rlt_pred, average='weighted', zero_division=0), 4)),
+                'F1-Score': float(round(f1_score(y_test, rlt_pred, average='weighted', zero_division=0), 4))
             }
             rf_metrics = {
-                'Accuracy': round(accuracy_score(y_test, rf_pred), 4),
-                'Precision': round(precision_score(y_test, rf_pred, average='weighted', zero_division=0), 4),
-                'Recall': round(recall_score(y_test, rf_pred, average='weighted', zero_division=0), 4),
-                'F1-Score': round(f1_score(y_test, rf_pred, average='weighted', zero_division=0), 4)
+                'Accuracy': float(round(accuracy_score(y_test, rf_pred), 4)),
+                'Precision': float(round(precision_score(y_test, rf_pred, average='weighted', zero_division=0), 4)),
+                'Recall': float(round(recall_score(y_test, rf_pred, average='weighted', zero_division=0), 4)),
+                'F1-Score': float(round(f1_score(y_test, rf_pred, average='weighted', zero_division=0), 4))
             }
         else:
             rlt_metrics = {
-                'MSE': round(mean_squared_error(y_test, rlt_pred), 4),
-                'RMSE': round(np.sqrt(mean_squared_error(y_test, rlt_pred)), 4),
-                'MAE': round(mean_absolute_error(y_test, rlt_pred), 4),
-                'R² Score': round(r2_score(y_test, rlt_pred), 4)
+                'MSE': float(round(mean_squared_error(y_test, rlt_pred), 4)),
+                'RMSE': float(round(np.sqrt(mean_squared_error(y_test, rlt_pred)), 4)),
+                'MAE': float(round(mean_absolute_error(y_test, rlt_pred), 4)),
+                'R² Score': float(round(r2_score(y_test, rlt_pred), 4))
             }
             rf_metrics = {
-                'MSE': round(mean_squared_error(y_test, rf_pred), 4),
-                'RMSE': round(np.sqrt(mean_squared_error(y_test, rf_pred)), 4),
-                'MAE': round(mean_absolute_error(y_test, rf_pred), 4),
-                'R² Score': round(r2_score(y_test, rf_pred), 4)
+                'MSE': float(round(mean_squared_error(y_test, rf_pred), 4)),
+                'RMSE': float(round(np.sqrt(mean_squared_error(y_test, rf_pred)), 4)),
+                'MAE': float(round(mean_absolute_error(y_test, rf_pred), 4)),
+                'R² Score': float(round(r2_score(y_test, rf_pred), 4))
             }
         
         # Get feature importances
@@ -295,9 +295,9 @@ def run_comparison():
         for i, name in enumerate(feature_names):
             feature_importance_data.append({
                 'feature': name,
-                'rlt_importance': round(rlt_norm[i], 6),
-                'rf_importance': round(rf_norm[i], 6),
-                'difference': round(rlt_norm[i] - rf_norm[i], 6)
+                'rlt_importance': float(round(rlt_norm[i], 6)),
+                'rf_importance': float(round(rf_norm[i], 6)),
+                'difference': float(round(rlt_norm[i] - rf_norm[i], 6))
             })
         
         # Sort by RLT importance
@@ -318,19 +318,19 @@ def run_comparison():
             'success': True,
             'task_type': task_type,
             'dataset': dataset_name,
-            'n_samples': len(y_train) + len(y_test),
-            'n_features': len(feature_names),
-            'n_train': len(y_train),
-            'n_test': len(y_test),
-            'random_state': random_state,
+            'n_samples': int(len(y_train) + len(y_test)),
+            'n_features': int(len(feature_names)),
+            'n_train': int(len(y_train)),
+            'n_test': int(len(y_test)),
+            'random_state': int(random_state),
             'rlt_metrics': rlt_metrics,
             'rf_metrics': rf_metrics,
             'importance_plot': importance_plot,
             'comparison_plot': comparison_plot,
             'feature_importance_data': feature_importance_data,
-            'feature_names': feature_names,
+            'feature_names': list(feature_names),
             'feature_stats': feature_stats,
-            'class_names': wrapper.class_names if task_type == 'classification' else None
+            'class_names': [str(c) for c in wrapper.class_names] if task_type == 'classification' and wrapper.class_names else None
         })
         
     except Exception as e:
@@ -395,23 +395,23 @@ def predict():
                 rf_proba = trained_models['rf'].predict_proba(X_input_scaled)[0]
                 
                 result['rlt_prediction'] = {
-                    'class': class_names[int(rlt_pred)] if class_names else int(rlt_pred),
-                    'probabilities': {class_names[i] if class_names else str(i): round(float(p), 4) for i, p in enumerate(rlt_proba)}
+                    'class': str(class_names[int(rlt_pred)]) if class_names else int(rlt_pred),
+                    'probabilities': {str(class_names[i]) if class_names else str(i): float(round(float(p), 4)) for i, p in enumerate(rlt_proba)}
                 }
                 result['rf_prediction'] = {
-                    'class': class_names[int(rf_pred)] if class_names else int(rf_pred),
-                    'probabilities': {class_names[i] if class_names else str(i): round(float(p), 4) for i, p in enumerate(rf_proba)}
+                    'class': str(class_names[int(rf_pred)]) if class_names else int(rf_pred),
+                    'probabilities': {str(class_names[i]) if class_names else str(i): float(round(float(p), 4)) for i, p in enumerate(rf_proba)}
                 }
             except:
                 result['rlt_prediction'] = {
-                    'class': class_names[int(rlt_pred)] if class_names else int(rlt_pred)
+                    'class': str(class_names[int(rlt_pred)]) if class_names else int(rlt_pred)
                 }
                 result['rf_prediction'] = {
-                    'class': class_names[int(rf_pred)] if class_names else int(rf_pred)
+                    'class': str(class_names[int(rf_pred)]) if class_names else int(rf_pred)
                 }
         else:
-            result['rlt_prediction'] = {'value': round(float(rlt_pred), 4)}
-            result['rf_prediction'] = {'value': round(float(rf_pred), 4)}
+            result['rlt_prediction'] = {'value': float(round(float(rlt_pred), 4))}
+            result['rf_prediction'] = {'value': float(round(float(rf_pred), 4))}
         
         return jsonify(result)
         
@@ -443,8 +443,8 @@ def dataset_info(dataset_name):
         
         return jsonify({
             'success': True,
-            'n_samples': len(wrapper.df),
-            'n_features': len(wrapper.quantitatives_variables),
+            'n_samples': int(len(wrapper.df)),
+            'n_features': int(len(wrapper.quantitatives_variables)),
             'feature_names': wrapper.quantitatives_variables,
             'task_type': wrapper.task_type,
             'description': dataset_name.replace('_', ' ').title(),
