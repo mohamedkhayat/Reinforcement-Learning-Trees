@@ -144,9 +144,65 @@ model = ReinforcementLearningTree(
 model.fit(X_train, y_train)
 preds = model.predict(X_test)
 ```
+```markdown
+
+## 🌐 Flask Web Application
+
+### Install Flask Requirements
+
+```bash
+pip install -r app/requirements.txt
+```
 
 ---
 
+## 🚀 MLOps Commands (Windows PowerShell)
+
+Use run.ps1 for all MLOps operations:
+
+### Train a Model
+
+```powershell
+.\run.ps1 train -Dataset breast_cancer
+```
+
+With custom parameters:
+
+```powershell
+.\run.ps1 train -Dataset sonar -NRltTrees 15 -NExtraTrees 75 -MutingRate 0.5
+```
+
+### Evaluate a Model
+
+```powershell
+.\run.ps1 evaluate
+```
+
+### Train + Evaluate
+
+```powershell
+.\run.ps1 all -Dataset breast_cancer
+```
+
+### Launch Flask Web App
+
+```powershell
+.\run.ps1 serve
+```
+
+Then open: **http://127.0.0.1:5000**
+
+### List Available Datasets
+
+```powershell
+.\run.ps1 list-datasets
+```
+
+### Show Help
+
+```powershell
+.\run.ps1 help
+```
 ## 📚 Citation
 
 If you use this implementation in academic work:
