@@ -25,29 +25,46 @@ This project is structured around four key objectives:
 
 ### 1️⃣ DSO 1: Strategy Re-implementation
 **Goal:** Faithfully reproduce the RLT algorithm and validate it on the 4 synthetic scenarios described in the original paper.
-*   **Key Feature:** Custom `ReinforcementLearningTree` class with "Embedded Model" (Extremely Randomized Trees) and "Variable Muting" logic.
-*   **Validation:** Successfully replicated scenarios:
+
+*   **Key Features Implemented:**
+    *   Custom `ReinforcementLearningTrees` class with **Embedded Model** (Extremely Randomized Trees)
+    *   **Variable Muting** mechanism (0%, 50%, 80% rates)
+    *   **Linear Combination Splits** with parameter `k` (k=1, 2, 5)
+    *   **Protected Set** for preserving important features
+*   **Validation:** Successfully replicated all 4 scenarios across p=200, 500, 1000 dimensions:
     *   *Scenario 1:* Sparse Classification
-    *   *Scenario 2:* Non-linear relationships
-    *   *Scenario 3:* Checkerboard (High correlation/Interaction)
+    *   *Scenario 2:* Non-linear Regression
+    *   *Scenario 3:* Checkerboard (High correlation & Interaction effects)
     *   *Scenario 4:* Linear signals
 
 ### 2️⃣ DSO 2: Benchmark Comparison
-**Goal:** Compare RLT against industry-standard models on 10 real-world UCI datasets (augmented with noise to $p=500$).
-*   **Competitors:** Random Forest (sklearn), Gradient Boosting (sklearn), XGBoost.
-*   **Metrics:** MSE (Regression), Accuracy (Classification), Training Time.
+**Goal:** Compare RLT against industry-standard models on 10 real-world UCI datasets (augmented with noise to p=500).
+
+*   **Competitors:** Random Forest (sklearn), Gradient Boosting (sklearn), XGBoost
+*   **Metrics:** Error Rate (Classification), MSE (Regression), Training Time
+*   **Key Finding:** RLT achieves **best or near-best accuracy** on most datasets, with a trade-off in training speed.
 
 ### 3️⃣ DSO 3: Explainability & Diagnosis
-**Goal:** diagnose *why* RLT outperforms RF in sparse settings.
-*   **Global Explainability:** Comparison of Variable Importance (VI) plots to show RLT's superior noise filtering.
-*   **Local Explainability:** LIME analysis on individual predictions.
+**Goal:** Diagnose *why* RLT outperforms RF in sparse settings using XAI techniques.
 
-### 4️⃣ DSO 4: Innovation
-**Goal:** Propose and test architectural improvements to the original RLT.
-*   **Experiment:** Replacing the standard embedded model with **LightGBM** to improve training speed without sacrificing accuracy.
+*   **Techniques Applied:**
+    *   **Global Feature Importance:** Comparison plots showing RLT's superior noise filtering
+    *   **Global SHAP (Beeswarm Plot):** Validates Protected Set mechanism
+    *   **Local SHAP (Waterfall Plot):** Confirms muted features contribute +0.00 to predictions
+*   **Key Finding:** RLT achieves **Model Sparsity** by zeroing out >50% of noisy predictors.
+
+### 4️⃣ DSO 4: Innovation (Architectural Improvements)
+**Goal:** Propose and test two architectural improvements to the original RLT.
+
+*   **Experiment 4.1 - LightGBM Embedded Model:**
+    *   Replacing ExtraTrees with **LightGBM** for signal extraction
+    *   **Result:** Better accuracy on complex problems, but 10-12x slower
+
+*   **Experiment 4.2 - K-Armed Bandit (UCB1):**
+    *   Using **UCB1 algorithm** for intelligent feature selection
+    *   **Result:** 15-25% faster training with comparable accuracy
 
 ---
-
 ## 🛠️ Installation & Environment Setup
 
 ### Requirements
@@ -144,10 +161,8 @@ model = ReinforcementLearningTree(
 model.fit(X_train, y_train)
 preds = model.predict(X_test)
 ```
-```markdown
-
 ## 🌐 Flask Web Application
-
+```markdown
 ### Install Flask Requirements
 
 ```bash
