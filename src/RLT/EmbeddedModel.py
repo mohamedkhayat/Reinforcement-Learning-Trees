@@ -3,8 +3,16 @@ import warnings
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
 import numpy as np
 from joblib import Parallel, delayed
-from lightgbm import LGBMClassifier, LGBMRegressor
-import lightgbm as lgb
+
+# Optional LightGBM import
+try:
+    from lightgbm import LGBMClassifier, LGBMRegressor
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+    LGBMClassifier = None
+    LGBMRegressor = None
 
 warnings.filterwarnings("ignore", message=".*X does not have valid feature names.*")
 warnings.filterwarnings(
@@ -175,9 +183,13 @@ class EmbeddedModel:
                     return None
 
                 if model_type_str == "lightgbm":
-                    unique_oob = np.unique(y_oob)
-                    if not np.isin(unique_oob, unique_train).all():
-                        return None
+                    if not LIGHTGBM_AVAILABLE:
+                        # Fallback to extra_trees if lightgbm not available
+                        model_type_str = "extra_trees"
+                    else:
+                        unique_oob = np.unique(y_oob)
+                        if not np.isin(unique_oob, unique_train).all():
+                            return None
 
             ex_params = {
                 "min_samples_split": self.min_samples_split,
@@ -200,26 +212,30 @@ class EmbeddedModel:
             if self.task_type.lower() == "classification":
                 if model_type_str == "extra_trees":
                     model = ExtraTreeClassifier(**ex_params)
-                elif model_type_str == "lightgbm":
+                elif model_type_str == "lightgbm" and LIGHTGBM_AVAILABLE:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")
                         model = LGBMClassifier(**lgbm_params)
                 else:
-                    return None
+                    # Fallback to extra_trees
+                    model = ExtraTreeClassifier(**ex_params)
+                    model_type_str = "extra_trees"
 
             elif self.task_type.lower() == "regression":
                 if model_type_str == "extra_trees":
                     model = ExtraTreeRegressor(**ex_params)
-                elif model_type_str == "lightgbm":
+                elif model_type_str == "lightgbm" and LIGHTGBM_AVAILABLE:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")
                         model = LGBMRegressor(**lgbm_params)
                 else:
-                    raise ValueError("Model not recognised")
+                    # Fallback to extra_trees
+                    model = ExtraTreeRegressor(**ex_params)
+                    model_type_str = "extra_trees"
             else:
                 return None
 
-            if model_type_str == "lightgbm":
+            if model_type_str == "lightgbm" and LIGHTGBM_AVAILABLE:
                 callbacks = [
                     lgb.early_stopping(stopping_rounds=5, verbose=False),
                     lgb.log_evaluation(period=0),

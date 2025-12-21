@@ -6,6 +6,12 @@
 #   make evaluate
 #   make all DATASET=sonar
 #   make clean
+#
+# Docker Usage:
+#   make docker-build
+#   make docker-run
+#   make docker-stop
+#   make docker-push DOCKER_USER=yourusername
 # ==============================================================================
 
 # Default values
@@ -21,6 +27,13 @@ RANDOM_STATE ?= 42
 N_JOBS ?= -1
 MODEL_DIR ?= models
 
+# Docker configuration
+DOCKER_IMAGE ?= rlt-app
+DOCKER_TAG ?= latest
+DOCKER_USER ?= kousay763
+DOCKER_CONTAINER ?= rlt-container
+DOCKER_PORT ?= 5000
+
 # Python executable - adjust path if needed
 # For Windows, use the venv Python directly
 PYTHON = .venv\Scripts\python.exe
@@ -29,7 +42,7 @@ PYTHON = .venv\Scripts\python.exe
 # Main targets
 # ==============================================================================
 
-.PHONY: all train evaluate clean help setup info
+.PHONY: all train evaluate clean help setup info docker-build docker-run docker-stop docker-push docker-clean docker-logs
 
 # Default target
 all: train evaluate
@@ -258,3 +271,95 @@ help:
 	@echo "  make train DATASET=sonar N_RLT_TREES=15"
 	@echo "  make all DATASET=breast_cancer"
 	@echo "  make evaluate-model MODEL_NAME=breast_cancer_20240115_143022"
+
+# ==============================================================================
+# Docker targets
+# ==============================================================================
+
+# Build Docker image
+docker-build:
+	@echo "========================================"
+	@echo "Building Docker Image: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@echo "========================================"
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+
+# Run Docker container (local image)
+docker-run:
+	@echo "========================================"
+	@echo "Running Docker Container: $(DOCKER_CONTAINER)"
+	@echo "========================================"
+	@echo "Access the app at: http://localhost:$(DOCKER_PORT)"
+	@echo "----------------------------------------"
+	docker run -d --name $(DOCKER_CONTAINER) -p $(DOCKER_PORT):5000 $(DOCKER_IMAGE):$(DOCKER_TAG)
+	@echo "Container started successfully!"
+
+# Run Docker container from Docker Hub
+docker-run-hub:
+	@echo "========================================"
+	@echo "Running Docker Container from Docker Hub"
+	@echo "========================================"
+	@echo "Image: $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@echo "Access the app at: http://localhost:$(DOCKER_PORT)"
+	@echo "----------------------------------------"
+	docker run -p $(DOCKER_PORT):5000 $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)
+
+# Run Docker container (interactive mode)
+docker-run-it:
+	@echo "========================================"
+	@echo "Running Docker Container (Interactive)"
+	@echo "========================================"
+	docker run -it --rm -p $(DOCKER_PORT):5000 $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+# Stop Docker container
+docker-stop:
+	@echo "========================================"
+	@echo "Stopping Docker Container: $(DOCKER_CONTAINER)"
+	@echo "========================================"
+	-docker stop $(DOCKER_CONTAINER)
+	-docker rm $(DOCKER_CONTAINER)
+	@echo "Container stopped and removed."
+
+# View Docker container logs
+docker-logs:
+	@echo "========================================"
+	@echo "Docker Container Logs"
+	@echo "========================================"
+	docker logs -f $(DOCKER_CONTAINER)
+
+# Tag and push to Docker Hub
+docker-push:
+	@echo "========================================"
+	@echo "Pushing to Docker Hub"
+	@echo "========================================"
+	@echo "Tagging image as $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)"
+	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)
+	@echo "Pushing to Docker Hub..."
+	docker push $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)
+	@echo "Push complete!"
+
+# Pull from Docker Hub
+docker-pull:
+	@echo "========================================"
+	@echo "Pulling from Docker Hub"
+	@echo "========================================"
+	docker pull $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG)
+
+# Clean Docker artifacts
+docker-clean:
+	@echo "========================================"
+	@echo "Cleaning Docker Artifacts"
+	@echo "========================================"
+	-docker stop $(DOCKER_CONTAINER) 2>/dev/null || true
+	-docker rm $(DOCKER_CONTAINER) 2>/dev/null || true
+	@echo "Removing all containers using image $(DOCKER_IMAGE)..."
+	-docker ps -a -q --filter ancestor=$(DOCKER_IMAGE):$(DOCKER_TAG) | ForEach-Object { docker rm -f $_ } 2>/dev/null || true
+	-docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG) -f 2>/dev/null || true
+	-docker rmi $(DOCKER_USER)/$(DOCKER_IMAGE):$(DOCKER_TAG) -f 2>/dev/null || true
+	@echo "Docker cleanup complete."
+
+# Full Docker workflow: build, run
+docker-deploy: docker-build docker-run
+	@echo "========================================"
+	@echo "Deployment Complete!"
+	@echo "========================================"
+	@echo "App running at: http://localhost:$(DOCKER_PORT)"

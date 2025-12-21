@@ -1,0 +1,78 @@
+# Files and directories to ignore in Docker build context
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Jupyter Notebooks (not needed for deployment)
+.ipynb_checkpoints/
+notebooks/
+
+# Models directory
+models/
+
+# Test data
+test_data/
+
+# Documentation
+*.md
+Notes.md
+README.md
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# R files
+*.R
+*.Rhistory
+
+# Makefile and scripts not needed
+Makefile
+run.ps1
+pyproject.toml
+
+# Results not needed in image
+utils/Results/
+
+# RLT egg-info
+RLT.egg-info/
+src/RLT.egg-info/
+
+# Main.py not needed
+main.py

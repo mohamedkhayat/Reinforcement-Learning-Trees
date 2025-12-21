@@ -11,7 +11,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet("train", "evaluate", "all", "clean", "setup", "serve", "help", "list-datasets")]
+    [ValidateSet("train", "evaluate", "all", "clean", "setup", "serve", "help", "list-datasets", "docker-build", "docker-run", "docker-run-hub", "docker-stop", "docker-logs", "docker-push", "docker-pull", "docker-clean")]
     [string]$Command = "help",
     
     [string]$Dataset = "",
@@ -162,6 +162,120 @@ function Show-Datasets {
     }
 }
 
+# Docker configuration
+$DockerImage = "rlt-app"
+$DockerTag = "latest"
+$DockerUser = "kousay763"
+$DockerContainer = "rlt-container"
+$DockerPort = 5000
+
+function Invoke-DockerBuild {
+    Write-Header "Building Docker Image: ${DockerImage}:${DockerTag}"
+    docker build -t "${DockerImage}:${DockerTag}" .
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Docker image built successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "Docker build failed!" -ForegroundColor Red
+        exit 1
+    }
+}
+
+function Invoke-DockerRun {
+    Write-Header "Running Docker Container (Local): $DockerContainer"
+    Write-Host "Access the app at: http://localhost:${DockerPort}" -ForegroundColor Green
+    docker run -d --name $DockerContainer -p "${DockerPort}:5000" "${DockerImage}:${DockerTag}"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Container started successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "Failed to start container!" -ForegroundColor Red
+    }
+}
+
+function Invoke-DockerRunHub {
+    Write-Header "Running Docker Container from Docker Hub"
+    Write-Host "Image: ${DockerUser}/${DockerImage}:${DockerTag}" -ForegroundColor Cyan
+    Write-Host "Access the app at: http://localhost:${DockerPort}" -ForegroundColor Green
+    Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
+    docker run -p "${DockerPort}:5000" "${DockerUser}/${DockerImage}:${DockerTag}"
+}
+
+function Invoke-DockerStop {
+    Write-Header "Stopping Docker Container: $DockerContainer"
+    docker stop $DockerContainer 2>$null
+    docker rm $DockerContainer 2>$null
+    Write-Host "Container stopped and removed." -ForegroundColor Green
+}
+
+function Invoke-DockerLogs {
+    Write-Header "Docker Container Logs"
+    docker logs -f $DockerContainer
+}
+
+function Invoke-DockerPush {
+    Write-Header "Pushing to Docker Hub: ${DockerUser}/${DockerImage}:${DockerTag}"
+    Write-Host "Tagging image..." -ForegroundColor Yellow
+    docker tag "${DockerImage}:${DockerTag}" "${DockerUser}/${DockerImage}:${DockerTag}"
+    Write-Host "Pushing to Docker Hub..." -ForegroundColor Yellow
+    docker push "${DockerUser}/${DockerImage}:${DockerTag}"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Push complete! Image available at: https://hub.docker.com/r/${DockerUser}/${DockerImage}" -ForegroundColor Green
+    } else {
+        Write-Host "Push failed! Make sure you are logged in: docker login" -ForegroundColor Red
+    }
+}
+
+function Invoke-DockerPull {
+    Write-Header "Pulling from Docker Hub: ${DockerUser}/${DockerImage}:${DockerTag}"
+    docker pull "${DockerUser}/${DockerImage}:${DockerTag}"
+}
+
+function Invoke-DockerClean {
+    Write-Header "Cleaning Docker Artifacts"
+    
+    # Stop and remove named container (suppress all errors)
+    try { docker stop $DockerContainer 2>&1 | Out-Null } catch {}
+    try { docker rm $DockerContainer 2>&1 | Out-Null } catch {}
+    
+    # Remove all containers using gunicorn (RLT app containers)
+    Write-Host "Removing RLT app containers..." -ForegroundColor Yellow
+    try {
+        $rltContainers = docker ps -a --format "{{.ID}}|{{.Command}}" | Where-Object { $_ -match "gunicorn" }
+        if ($rltContainers) {
+            $rltContainers | ForEach-Object {
+                $containerId = ($_ -split '\|')[0]
+                Write-Host "  Removing container: $containerId" -ForegroundColor DarkGray
+                docker rm -f $containerId 2>&1 | Out-Null
+            }
+        }
+    } catch {}
+    
+    # Remove local images (suppress all errors)
+    Write-Host "Removing images..." -ForegroundColor Yellow
+    try { docker rmi "${DockerImage}:${DockerTag}" -f 2>&1 | Out-Null } catch {}
+    try { docker rmi "${DockerUser}/${DockerImage}:${DockerTag}" -f 2>&1 | Out-Null } catch {}
+    
+    # Remove dangling images from this project (images with <none> tag)
+    Write-Host "Removing dangling RLT images..." -ForegroundColor Yellow
+    try {
+        $danglingImages = docker images --filter "reference=${DockerUser}/${DockerImage}" --filter "dangling=true" -q
+        if ($danglingImages) {
+            $danglingImages | ForEach-Object {
+                Write-Host "  Removing image: $_" -ForegroundColor DarkGray
+                docker rmi -f $_ 2>&1 | Out-Null
+            }
+        }
+        # Also check local images
+        $localDangling = docker images --filter "reference=${DockerImage}" --filter "dangling=true" -q
+        if ($localDangling) {
+            $localDangling | ForEach-Object {
+                docker rmi -f $_ 2>&1 | Out-Null
+            }
+        }
+    } catch {}
+    
+    Write-Host "Docker cleanup complete." -ForegroundColor Green
+}
+
 function Show-Help {
     Write-Host @"
 
@@ -216,6 +330,16 @@ Other:
   .\run.ps1 clean
   .\run.ps1 serve
 
+Docker Commands:
+  .\run.ps1 docker-build    Build Docker image
+  .\run.ps1 docker-run      Run Docker container (local image)
+  .\run.ps1 docker-run-hub  Run from Docker Hub (kousay763/rlt-app)
+  .\run.ps1 docker-stop     Stop and remove container
+  .\run.ps1 docker-logs     View container logs
+  .\run.ps1 docker-push     Push image to Docker Hub (kousay763)
+  .\run.ps1 docker-pull     Pull image from Docker Hub
+  .\run.ps1 docker-clean    Remove all Docker artifacts
+
 "@ -ForegroundColor White
 }
 
@@ -231,6 +355,14 @@ switch ($Command) {
     "setup" { Invoke-Setup }
     "serve" { Invoke-Serve }
     "list-datasets" { Show-Datasets }
+    "docker-build" { Invoke-DockerBuild }
+    "docker-run" { Invoke-DockerRun }
+    "docker-run-hub" { Invoke-DockerRunHub }
+    "docker-stop" { Invoke-DockerStop }
+    "docker-logs" { Invoke-DockerLogs }
+    "docker-push" { Invoke-DockerPush }
+    "docker-pull" { Invoke-DockerPull }
+    "docker-clean" { Invoke-DockerClean }
     "help" { Show-Help }
     default { Show-Help }
 }
